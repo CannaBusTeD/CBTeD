@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
 import { loadPublicConfig } from "./config.js";
+import { writingFieldCopy } from "./writing-fields.mjs";
 import { isTemporaryRegistrationLimit, isEmailConfirmationRequired, registrationNotice } from "./auth-notices.mjs";
 
 // Get only the project's browser-safe publishable configuration.
@@ -213,6 +214,24 @@ async function chooseProject(project) {
   await loadHandoffs(serial);
   if (serial === state.projectLoadSerial) message("Project ready: " + project.title);
 }
+function updateWritingLabels() {
+  const fields = writingFieldCopy($("source-type").value);
+  const mapping = [
+    ["writing-title-label", "textContent", fields.titleLabel],
+    ["source-title", "placeholder", fields.titlePlaceholder],
+    ["writing-current-label", "textContent", fields.currentLabel],
+    ["writing-current-help", "textContent", fields.currentHelp],
+    ["source-text", "placeholder", fields.currentPlaceholder],
+    ["writing-ideas-label", "textContent", fields.ideasLabel],
+    ["writing-ideas-help", "textContent", fields.ideasHelp],
+    ["writing-ideas", "placeholder", fields.ideasPlaceholder],
+    ["writing-suggestions-label", "textContent", fields.suggestionsLabel],
+    ["writing-suggestions-help", "textContent", fields.suggestionsHelp],
+    ["writing-suggestions", "placeholder", fields.suggestionsPlaceholder]
+  ];
+  for (const [elementId, property, value] of mapping) $(elementId)[property] = value;
+}
+
 function resetSourceForm() {
   state.source = null;
   state.version = null;
@@ -222,9 +241,12 @@ function resetSourceForm() {
   $("source-title").value = "";
   $("source-type").value = "lyrics";
   $("source-text").value = "";
+  $("writing-ideas").value = "";
+  $("writing-suggestions").value = "";
+  updateWritingLabels();
   $("version-select").disabled = true;
-  $("version-select").replaceChildren(new Option("No saved version", ""));
-  $("version-info").textContent = "New source. Saving will create version 1.";
+  $("version-select").replaceChildren(new Option("No drafts saved yet", ""));
+  $("version-info").textContent = "New writing. Your first save will create Version 1.";
   $("approval-info").textContent = "Approval is an explicit user decision.";
   $("approve-source").disabled = true;
   $("handoff-source").disabled = true;
@@ -237,7 +259,7 @@ async function loadSources(serial = state.projectLoadSerial, preferredSourceId =
   if (serial !== state.projectLoadSerial) return;
   state.sources = sources || [];
   const picker = $("source-select");
-  picker.replaceChildren(new Option("New source", ""));
+  picker.replaceChildren(new Option("Start something new", ""));
   for (const source of state.sources) picker.add(new Option(source.title, source.id));
   const selected = state.sources.find((x) => x.id === preferredSourceId) || state.sources[0];
   if (selected) await chooseSource(selected.id, preferredVersionId);
@@ -252,6 +274,7 @@ async function chooseSource(sourceId, preferredVersionId = null) {
   $("source-select").value = source.id;
   $("source-title").value = source.title;
   $("source-type").value = source.source_kind || "other";
+  updateWritingLabels();
   const projectId = requireProject().id;
   const versions = await query(db.from("source_versions")
     .select("id,version_number,created_at,based_on_id,storage_path")
@@ -267,7 +290,9 @@ async function chooseSource(sourceId, preferredVersionId = null) {
   if (chosen) await chooseVersion(chosen.id);
   else {
     $("source-text").value = "";
-    $("version-info").textContent = "This source has no saved versions.";
+    $("writing-ideas").value = "";
+    $("writing-suggestions").value = "";
+    $("version-info").textContent = "This piece of writing has no saved drafts yet.";
     $("approve-source").disabled = true;
     $("handoff-source").disabled = true;
   }
@@ -278,13 +303,15 @@ async function chooseVersion(versionId) {
   const projectId = requireProject().id;
   const sourceId = state.source.id;
   const version = await query(db.from("source_versions")
-    .select("id,source_id,version_number,content,storage_path,created_at,based_on_id")
+    .select("id,source_id,version_number,content,ideas,suggested_text,storage_path,created_at,based_on_id")
     .eq("project_id", projectId).eq("source_id", sourceId)
     .eq("id", chosen.id).single());
   if (state.project?.id !== projectId || state.source?.id !== sourceId) return;
   state.version = version;
   $("version-select").value = version.id;
   $("source-text").value = version.content || "";
+  $("writing-ideas").value = version.ideas || "";
+  $("writing-suggestions").value = version.suggested_text || "";
   $("version-info").textContent = "Version " + version.version_number + " saved " +
     readableDate(version.created_at) + (version.storage_path ? " (stored file version)" : "");
   $("approve-source").disabled = false;
@@ -313,8 +340,13 @@ async function saveSource() {
   const title = $("source-title").value.trim();
   const kind = $("source-type").value;
   const content = $("source-text").value;
-  if (!title || !content.trim()) throw new Error("A source needs a title and non-empty text.");
-  message("Saving a new source version…");
+  const ideas = $("writing-ideas").value;
+  const suggestedText = $("writing-suggestions").value;
+  if (!title) throw new Error("Enter a title for your song, poem or other writing.");
+  if (![content, ideas, suggestedText].some((value) => value.trim())) {
+    throw new Error("Write something in Current Writing, My Ideas, or Suggested Changes before saving.");
+  }
+  message("Saving your writing, ideas and suggestions as a new version…");
   let source = state.source;
   if (!source) {
     source = await query(db.from("sources").insert({
@@ -335,12 +367,15 @@ async function saveSource() {
   const nextNumber = previous ? previous.version_number + 1 : 1;
   const version = await query(db.from("source_versions").insert({
     project_id: project.id, source_id: source.id,
-    version_number: nextNumber, content,
+    version_number: nextNumber,
+    content: content.trim() ? content : null,
+    ideas: ideas.trim() ? ideas : null,
+    suggested_text: suggestedText.trim() ? suggestedText : null,
     based_on_id: state.version?.id || previous?.id || null,
     change_note: nextNumber === 1 ? "Initial source" : "User saved a new version"
   }).select("id,version_number").single());
   await loadSources(state.projectLoadSerial, source.id, version.id);
-  message("Saved " + source.title + ", version " + version.version_number + ". It remains unapproved until you approve it.");
+  message("Saved " + source.title + ", Version " + version.version_number + ". Current writing, ideas and suggested changes are stored separately. The draft remains unapproved until you approve it.");
 }
 async function approveVersion() {
   const project = requireProject();
@@ -545,6 +580,7 @@ $("source-select").addEventListener("change", handle(async () => {
 }));
 $("version-select").addEventListener("change", handle(() => chooseVersion($("version-select").value)));
 $("source-form").addEventListener("submit", handle(saveSource));
+$("source-type").addEventListener("change", updateWritingLabels);
 $("new-source").addEventListener("click", () => resetSourceForm());
 $("approve-source").addEventListener("click", handle(approveVersion));
 $("handoff-source").addEventListener("click", handle(prepareHandoff));
