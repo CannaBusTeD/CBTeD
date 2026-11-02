@@ -38,6 +38,14 @@ button.secondary:hover:not(:disabled){background:#344b64}
 .auth-dialog button{display:block;width:100%;margin-top:20px}
 
 .hint{color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
+/* Make the meaning of each writing box immediately visible, especially on phones. */
+.writing-field{background:#122034;border:1px solid #4e6780;border-radius:12px;padding:15px;margin:15px 0}
+.writing-field label{font-size:1.08rem;font-weight:800;display:block;margin:0 0 4px}
+.writing-field .hint{margin:0 0 12px}
+.writing-field textarea{margin-top:0}
+.writing-field .compact-textarea{min-height:150px}
+.writing-field:focus-within{border-color:var(--accent)}
+
 .section-heading{display:flex;justify-content:space-between;align-items:center;gap:14px}
 .session-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin:8px 0 20px}
 .session-bar p{margin:0;overflow-wrap:anywhere}
