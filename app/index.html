@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#121b28">
+  <meta name="description" content="CBTeD: a source-first shared project manager for Writing, Visual and Animation studios.">
+  <title>CBTeD | Project Manager</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+  <div class="container header-inner">
+    <div><p class="eyebrow">CBTeD / PROJECT CORE</p><h1>Creative Project Manager</h1></div>
+    <span class="pill">Foundation release</span>
+  </div>
+</header>
+<main id="main" class="container">
+  <p class="intro">Keep the original writing, reference files, approved versions and studio tasks together. Creative work stays private to its project owner.</p>
+  <div id="status" class="status" role="status" aria-live="polite">Loading…</div>
+  <section id="auth-panel" class="panel" aria-labelledby="auth-heading">
+    <h2 id="auth-heading">Sign in or create an account</h2>
+    <p>Use an email address and a strong password. Your CBTeD account is separate from your Supabase dashboard login.</p>
+    <form id="auth-form">
+      <div class="fields">
+        <label>Email <input id="email" name="email" type="email" autocomplete="email" required></label>
+        <label>Password <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+      </div>
+      <div class="actions">
+        <button type="submit">Sign in</button>
+        <button type="button" id="sign-up" class="secondary">Create account</button>
+      </div>
+    </form>
+    <p class="hint">New account? You may need to confirm the email, then return here and sign in.</p>
+  </section>
+  <section id="workspace" hidden aria-label="Your private workspace">
+    <div class="session-bar">
+      <p>Signed in as <strong id="user-email"></strong></p>
+      <button type="button" id="sign-out" class="secondary">Sign out</button>
+    </div>
+    <div class="layout">
+      <aside class="panel" aria-labelledby="projects-heading">
+        <h2 id="projects-heading">Projects</h2>
+        <form id="project-form">
+          <label>New project name <input id="project-title" name="project-title" placeholder="e.g. A new song" maxlength="200" required></label>
+          <button type="submit">Create project</button>
+        </form>
+        <p id="project-empty" class="hint">You have no projects yet.</p>
+        <ul id="project-list" class="clean-list" aria-label="Your projects"></ul>
+      </aside>
+      <div id="project-details" class="main-column" hidden>
+        <section class="panel" aria-labelledby="selected-heading">
+          <p class="eyebrow">SELECTED PROJECT</p>
+          <h2 id="selected-heading"></h2>
+          <p id="project-summary" class="hint"></p>
+        </section>
+        <section class="panel" aria-labelledby="writing-heading">
+          <div class="section-heading"><h2 id="writing-heading">Writing and source versions</h2><span class="pill">Writing</span></div>
+          <p>The original source is never overwritten. Every save creates a numbered version.</p>
+          <label>Existing source
+            <select id="source-select"><option value="">New source</option></select>
+          </label>
+          <form id="source-form">
+            <div class="fields">
+              <label>Source title <input id="source-title" maxlength="200" required placeholder="Song, poem or script title"></label>
+              <label>Source type
+                <select id="source-type">
+                  <option value="lyrics">Lyrics</option><option value="poem">Poem</option>
+                  <option value="story">Story</option><option value="script">Script</option>
+                  <option value="treatment">Treatment</option><option value="notes">Notes</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+            <label>Source text <textarea id="source-text" rows="12" required spellcheck="true" placeholder="Paste or write the authoritative source here"></textarea></label>
+            <div class="actions">
+              <button type="submit">Save new version</button>
+              <button type="button" id="new-source" class="secondary">Start another source</button>
+            </div>
+          </form>
+          <p id="version-info" class="hint" aria-live="polite">No source version selected.</p>
+          <div class="actions">
+            <button type="button" id="approve-source" class="secondary" disabled>Approve current version</button>
+            <button type="button" id="handoff-source" class="secondary" disabled>Prepare Visual handoff</button>
+          </div>
+          <p id="approval-info" class="hint">Approval is an explicit user decision, never automatic.</p>
+        </section>
+        <section class="panel" aria-labelledby="files-heading">
+          <div class="section-heading"><h2 id="files-heading">Private project files</h2><span class="pill">All studios</span></div>
+          <p>Reference photos, documents, sound and video files are stored privately. Each upload gets a unique path.</p>
+          <form id="file-form">
+            <div class="fields">
+              <label>File category
+                <select id="file-category">
+                  <option value="references">Reference images and files</option>
+                  <option value="writing">Writing files</option>
+                  <option value="images">Generated images</option>
+                  <option value="videos">Video clips</option>
+                  <option value="audio">Audio</option>
+                  <option value="exports">Exports</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>Choose a file <input id="project-file" type="file" required></label>
+            </div>
+            <button type="submit">Upload private file</button>
+          </form>
+          <h3>Files in this project</h3>
+          <p id="files-empty" class="hint">No files uploaded.</p>
+          <ul id="files-list" class="clean-list"></ul>
+        </section>
+        <section class="panel" aria-labelledby="tasks-heading">
+          <div class="section-heading"><h2 id="tasks-heading">Studio tasks</h2><span class="pill">Shared progress</span></div>
+          <p>Track work in Writing, Visual or Animation. Creating a task records it, but does not start AI generation.</p>
+          <form id="task-form">
+            <div class="fields">
+              <label>Studio
+                <select id="task-studio"><option value="writing">Writing</option><option value="visual">Visual</option><option value="animation">Animation</option></select>
+              </label>
+              <label>Requested separate outputs <input id="task-units" type="number" min="1" max="1000" value="1" required></label>
+            </div>
+            <label>Work to do <input id="task-operation" maxlength="300" placeholder="e.g. Create 6 distinct images" required></label>
+            <button type="submit">Create task</button>
+          </form>
+          <h3>Project tasks</h3>
+          <p id="tasks-empty" class="hint">No tasks recorded.</p>
+          <ul id="tasks-list" class="clean-list"></ul>
+        </section>
+        <section class="panel" aria-labelledby="handoffs-heading">
+          <h2 id="handoffs-heading">Studio handoffs</h2>
+          <p>An approved writing version can be handed off to Visual Studio without changing the source text.</p>
+          <p id="handoffs-empty" class="hint">No handoffs recorded.</p>
+          <ul id="handoffs-list" class="clean-list"></ul>
+        </section>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="container footer"><p>CBTeD foundation app. The studios' creative rules remain in the GitHub source; generation-tool integrations are not yet connected.</p></footer>
+</body>
+</html>
