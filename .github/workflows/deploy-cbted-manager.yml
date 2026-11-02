@@ -1,0 +1,35 @@
+name: Publish CBTeD Project Manager
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/deploy-cbted-manager.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: cbted-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment: github-pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload the static CBTeD app
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: app
+      - name: Deploy the project manager
+        id: deployment
+        uses: actions/deploy-pages@v4
