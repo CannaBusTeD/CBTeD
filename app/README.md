@@ -9,6 +9,7 @@ This minimal accessible interface connects the existing ten-table CBTeD database
 It supports:
 
 - Email/password sign-up, sign-in, persistent session and sign-out via Supabase Auth.
+- Accessible, mobile-friendly confirmation dialog after sign-up without a session, with instructions to check inbox/spam and confirm the email; the same dialog distinguishes an existing unconfirmed account from Supabase's short security cooldown. It never promises that a rate-limited request succeeded.
 - Creating and switching between private owner-scoped projects.
 - Creating source documents, saving separate numbered text versions, and reopening specific versions without overwriting earlier text.
 - Explicit source-version approvals (append-only decisions).
@@ -29,7 +30,7 @@ It does **not** yet run the three creative studio agents or image/video tools. H
 - Browser API configuration: a deployed **public-only** Supabase Edge Function named `cbted-public-config`. It returns the project's URL, private bucket ID and **publishable** (not secret) key.
 - No password, secret key, service-role key, unpublished writing, photographs or private project content is committed to the public repository.
 - Deployment: `.github/workflows/deploy-cbted-manager.yml` publishes the `app/` directory to GitHub Pages. The repository owner must first enable GitHub Pages with **Source: GitHub Actions**, if not already enabled.
-- Source sanity checks: `node --check app/app.js`, `node --check app/config.js` and `node tests/check-project-manager.mjs` run before the Pages deployment attempt.
+- Source checks run before Pages deployment: JavaScript syntax, DOM wiring/accessibility checks (`tests/check-project-manager.mjs`), and signup/cooldown message tests (`tests/check-auth-notices.mjs`).
 
 ## One-time setup before sign-in can be tested
 
