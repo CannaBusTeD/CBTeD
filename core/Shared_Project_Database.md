@@ -63,14 +63,21 @@ Project-scoped foreign keys include the project ID, preventing a task, asset, so
 ## What is **not** implemented yet
 
 - Live sign-in-driven file uploads/downloads and actual user files. The private bucket and owner-scoped SELECT/INSERT Storage policies are installed, but no end-to-end authenticated upload/download has been run.
-- Sign-in UI, account onboarding or working application sessions.
-- A CBTeD API/MCP server that reads/writes these tables and invokes generation providers.
-- Application-side approval checks, latest-revision selection, automated workflow advancement and state transitions.
+- A working and verified authenticated browser session. The sign-in UI now exists under `app/`, but user sign-in is not yet live-tested.
+- A CBTeD studio execution coordinator/MCP server that invokes actual generation providers. The first browser project manager code now accesses project records through the Supabase Data API, subject to RLS.
+- Automated studio workflow advancement and full state transition coordination. The browser application has explicit source-version approval and latest-version selection, but they have not yet passed authenticated end-to-end testing.
 - Integration of the three studio instruction contracts with the live database.
-- A user interface or deployed public CBTeD plugin.
+- A published public CBTeD plugin. The first browser user interface has been committed under `app/` and a Pages workflow added, but live hosting is not yet verified.
 - Live owner/other-user RLS interaction tests; the current verification was schema/policy/grant inspection plus Supabase security advisors.
 
 Do not claim any of those capabilities have been delivered just because the schema exists.
+
+## Project manager implementation
+
+- `app/` contains the browser interface for sign-in, creating projects, versioned writing, project rules, approvals, private files, task records and a Writing-to-Visual handoff record.
+- `.github/workflows/deploy-cbted-manager.yml` deploys the static app when GitHub Pages is enabled with GitHub Actions as its source.
+- `cbted-public-config` is a deployed Supabase Edge Function exposing only the browser-safe publishable key, Supabase project URL and bucket name. It never exposes database secrets.
+- Supabase Auth redirect settings still need configuring for the published site. No real account or cross-user end-to-end tests have been performed yet.
 
 ## Security and workflow invariants
 
@@ -84,4 +91,4 @@ Do not claim any of those capabilities have been delivered just because the sche
 
 ## Next implementation step
 
-Connect a minimally functional project manager with authenticated sign-in, then verify that it can create a project, save/retrieve a source version and upload/read a private asset as the same user. Test cross-user denial before deployment.
+Enable GitHub Pages, configure Supabase Auth Site URL and Redirect URLs, and run the first genuine user acceptance test: sign in, create project, save/reopen a source version, approve it, upload/download a private file and verify persistence. Also test that a second account cannot access the first account's data. The first browser application and public-only configuration service are now implemented; real-user operation has not yet been verified.
