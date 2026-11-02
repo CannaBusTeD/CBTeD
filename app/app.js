@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
 import { loadPublicConfig } from "./config.js";
+import { isTemporaryRegistrationLimit, isEmailConfirmationRequired, registrationNotice } from "./auth-notices.mjs";
 
 // Get only the project's browser-safe publishable configuration.
 // Never embed a database password, secret key or service-role key in this app.
@@ -97,12 +98,28 @@ async function syncSession(session) {
   message("Signed in. Loading your projects.");
   await loadProjects();
 }
+function showRegistrationNotice(kind, email) {
+  const notice = registrationNotice(kind, email);
+  $("signup-dialog-title").textContent = notice.title;
+  $("signup-dialog-description").textContent = notice.description;
+  $("signup-dialog-instructions").textContent = notice.instructions;
+  const dialog = $("signup-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
 async function signIn() {
   const email = $("email").value.trim();
   const password = $("password").value;
   message("Signing in…");
   const { data, error } = await db.auth.signInWithPassword({ email, password });
-  if (error) throw error;
+  if (error) {
+    if (isEmailConfirmationRequired(error)) {
+      message("Confirm your email before signing in.");
+      showRegistrationNotice("unconfirmed", email);
+      return;
+    }
+    throw error;
+  }
   $("password").value = "";
   await syncSession(data.session);
 }
@@ -115,10 +132,22 @@ async function signUp() {
     email, password,
     options: { emailRedirectTo: window.location.origin + window.location.pathname }
   });
-  if (error) throw error;
+  if (error) {
+    if (isTemporaryRegistrationLimit(error)) {
+      $("password").value = "";
+      message("Your earlier registration request may already have gone through. Check your email.");
+      showRegistrationNotice("cooldown", email);
+      return;
+    }
+    throw error;
+  }
   $("password").value = "";
-  if (data.session) await syncSession(data.session);
-  else message("Check your email for a confirmation link. Once confirmed, return here and sign in. Check spam if necessary.");
+  if (data.session) {
+    await syncSession(data.session);
+  } else {
+    message("Registration submitted. Check your inbox or spam folder for your confirmation email.");
+    showRegistrationNotice("submitted", email);
+  }
 }
 
 function drawProjects() {
@@ -503,6 +532,7 @@ async function loadHandoffs(serial = state.projectLoadSerial) {
 
 $("auth-form").addEventListener("submit", handle(signIn));
 $("sign-up").addEventListener("click", handle(signUp));
+$("signup-dialog-close").addEventListener("click", () => $("signup-dialog").close());
 $("sign-out").addEventListener("click", handle(async () => {
   const { error } = await db.auth.signOut();
   if (error) throw error;
