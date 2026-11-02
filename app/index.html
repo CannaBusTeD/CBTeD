@@ -59,9 +59,14 @@
         <section class="panel" aria-labelledby="writing-heading">
           <div class="section-heading"><h2 id="writing-heading">Writing and source versions</h2><span class="pill">Writing</span></div>
           <p>The original source is never overwritten. Every save creates a numbered version.</p>
-          <label>Existing source
-            <select id="source-select"><option value="">New source</option></select>
-          </label>
+          <div class="fields">
+            <label>Existing source
+              <select id="source-select"><option value="">New source</option></select>
+            </label>
+            <label>Saved version
+              <select id="version-select" disabled><option value="">No saved version</option></select>
+            </label>
+          </div>
           <form id="source-form">
             <div class="fields">
               <label>Source title <input id="source-title" maxlength="200" required placeholder="Song, poem or script title"></label>
@@ -86,6 +91,26 @@
             <button type="button" id="handoff-source" class="secondary" disabled>Prepare Visual handoff</button>
           </div>
           <p id="approval-info" class="hint">Approval is an explicit user decision, never automatic.</p>
+        </section>
+        <section class="panel" aria-labelledby="rules-heading">
+          <h2 id="rules-heading">Project rules and corrections</h2>
+          <p>Store project-specific rules separately from the three studios' master instructions. Revisions retain their history.</p>
+          <form id="rule-form">
+            <div class="fields">
+              <label>Applies to
+                <select id="rule-scope"><option value="project">Whole project</option><option value="writing">Writing</option><option value="visual">Visual</option><option value="animation">Animation</option></select>
+              </label>
+              <label>Rule name <input id="rule-key" maxlength="160" placeholder="e.g. Character wardrobe" required></label>
+              <label>Kind
+                <select id="rule-kind"><option value="constraint">Constraint</option><option value="correction">Correction</option><option value="decision">Decision</option><option value="preference">Preference</option><option value="reference">Reference</option></select>
+              </label>
+            </div>
+            <label>Exact rule text <textarea id="rule-body" rows="4" required></textarea></label>
+            <button type="submit">Save rule revision</button>
+          </form>
+          <h3>Current project rules</h3>
+          <p id="rules-empty" class="hint">No project-specific rules saved.</p>
+          <ul id="rules-list" class="clean-list"></ul>
         </section>
         <section class="panel" aria-labelledby="files-heading">
           <div class="section-heading"><h2 id="files-heading">Private project files</h2><span class="pill">All studios</span></div>
