@@ -1,6 +1,6 @@
 # CBTeD Shared Project Database
 
-Status: **Initial database schema deployed**. This document describes the current state of the dedicated CBTeD Supabase development project. It is not a claim that the studios are connected to an application or that asset storage is configured.
+Status: **Initial database schema and private project asset storage deployed**. This document describes the current state of CBTeD Supabase. The studios are not yet connected to an application.
 
 ## Deployment
 
@@ -14,7 +14,9 @@ Status: **Initial database schema deployed**. This document describes the curren
 - Anonymous role has no SELECT privilege on any of these ten tables.
 - All user access to these tables is restricted by RLS policies to the project's owner.
 - Public-client deletion is not granted. Versions, rules, approvals, outputs and history are append-only from the client API's perspective.
-- Supabase security advisors reported **zero lints** immediately after deployment.
+- Supabase security advisors reported **zero lints** after schema deployment and again after storage configuration.
+- Storage migration: `20261102214953_create_cbted_private_assets_storage` (name: `create_cbted_private_assets_storage`).
+- Private Storage bucket: `cbted-project-assets` (`public = false`). The bucket currently has no uploaded user assets.
 
 ## Database tables
 
@@ -24,7 +26,7 @@ Status: **Initial database schema deployed**. This document describes the curren
 | `sources` | Logical writing/source document and its type | Belongs to a project; can have many source versions |
 | `source_versions` | Immutable draft/approved-source candidates, version number, text or private storage path and previous-version reference | Belongs to a source in the *same project*; unique source/version number |
 | `project_rules` | Versioned project rules, corrections, decisions, preferences and continuity constraints | Scope may be project/writing/visual/animation; revision numbers, supersession links, locked flag |
-| `assets` | Metadata and private storage paths for uploaded references and generated files | Role, dimensions, duration, MIME type, linked source version; actual files not yet provisioned |
+| `assets` | Metadata and private storage paths for uploaded references and generated files | Role, dimensions, duration, MIME type, linked source version; the private bucket is provisioned, but file uploads are not yet connected |
 | `tasks` | Studio activity and step/progress tracking | Writing/visual/animation, operation, status, current step, requested and completed units, input sources/assets |
 | `outputs` | Result records for text/images/videos/prompts/etc. | Linked task, optional source/asset, sequence index, verification status; preserve attempts |
 | `approvals` | Append-only decisions approving, rejecting or revoking a source version, asset or output | Each event names **exactly one** target in the same project and records the acting authenticated user |
@@ -38,16 +40,29 @@ Project-scoped foreign keys include the project ID, preventing a task, asset, so
 1. A signed-in user creates a `projects` row.
 2. Writing source material is stored in `sources` and `source_versions` without overwriting prior versions.
 3. Project-specific rules/corrections are appended to `project_rules`. The core application must resolve which revisions are current.
-4. Reference or output **file metadata** lives in `assets`. Actual images, audio and video require a private storage bucket and upload permissions as a separate implementation step.
+4. Reference or output **file metadata** lives in `assets`. The private `cbted-project-assets` bucket is provisioned with authenticated owner-only read and insert policies, but the file-upload application integration is not yet implemented.
 5. Each studio operation gets a `tasks` record with the next step and required output count.
 6. Completed attempts are written to `outputs`, with verification state.
 7. User approval is recorded in `approvals`; the receiving studio checks approved source and assets rather than trusting a summary.
 8. `handoffs` connects independent studios while leaving source and prior results intact.
 9. `activity_events` records significant actions for traceability.
 
+
+## Private asset storage configuration
+
+- Bucket: `cbted-project-assets`; private, never public.
+- Object-key convention: `<authenticated-user-uuid>/<project-uuid>/<category>/<unique-filename>`.
+- Allowed categories: `writing`, `references`, `images`, `videos`, `audio`, `exports`, `other`.
+- **SELECT** is permitted to an authenticated user only when the object key's user prefix matches their authenticated UUID AND the project UUID identifies a project they own.
+- **INSERT** has the same ownership checks, plus a recognised category segment. There are deliberately no ordinary-client UPDATE or DELETE policies; store each new version at a new path to avoid unwanted overwrites.
+- The underlying `storage.objects` table has RLS enabled. Both policies were inspected after migration, and security advisors reported zero lints.
+- No application-level sign-in, actual upload, private-download or cross-user denial test has yet run. Do not claim that working end-to-end user uploads have been verified.
+- A file's metadata in `public.assets` does not automatically upload or grant access to the file. The future app must verify file-key consistency with project ownership.
+- Bucket has no explicit per-file limit configured; the Supabase plan/provider upload limits still apply. Large video delivery must be designed around the actual plan capabilities.
+
 ## What is **not** implemented yet
 
-- Supabase Storage private bucket, upload/download permissions, or actual file uploads.
+- Live sign-in-driven file uploads/downloads and actual user files. The private bucket and owner-scoped SELECT/INSERT Storage policies are installed, but no end-to-end authenticated upload/download has been run.
 - Sign-in UI, account onboarding or working application sessions.
 - A CBTeD API/MCP server that reads/writes these tables and invokes generation providers.
 - Application-side approval checks, latest-revision selection, automated workflow advancement and state transitions.
@@ -69,4 +84,4 @@ Do not claim any of those capabilities have been delivered just because the sche
 
 ## Next implementation step
 
-Create **private project asset storage** and safe ownership-scoped upload/read policies, then connect a minimally functional project manager that can create a project, save a source version and retrieve it as the same authenticated user.
+Connect a minimally functional project manager with authenticated sign-in, then verify that it can create a project, save/retrieve a source version and upload/read a private asset as the same user. Test cross-user denial before deployment.
