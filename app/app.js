@@ -291,6 +291,9 @@ async function saveSource() {
     source = await query(db.from("sources").insert({
       project_id: project.id, title, source_kind: kind
     }).select("id,title,source_kind,created_at").single());
+    // Retain the newly-created source if its first version insert later fails.
+    // A retry then uses the same source rather than creating a duplicate.
+    state.source = source;
   } else if (source.title !== title || source.source_kind !== kind) {
     source = await query(db.from("sources")
       .update({ title, source_kind: kind }).eq("id", source.id)
