@@ -1,9 +1,19 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
-import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, STORAGE_BUCKET } from "./config.js";
+import { loadPublicConfig } from "./config.js";
 
-// Only a public/publishable Supabase key belongs in browser code.
-// Never place a database password, secret key or service-role key here.
-const db = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+// Get only the project's browser-safe publishable configuration.
+// Never embed a database password, secret key or service-role key in this app.
+let publicConfig;
+try {
+  publicConfig = await loadPublicConfig();
+} catch (error) {
+  document.getElementById("status").textContent =
+    "Unable to connect to CBTeD configuration: " + (error?.message || "Unknown error");
+  document.getElementById("status").classList.add("error");
+  throw error;
+}
+const STORAGE_BUCKET = publicConfig.bucket;
+const db = createClient(publicConfig.url, publicConfig.publishableKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 const $ = (id) => document.getElementById(id);
