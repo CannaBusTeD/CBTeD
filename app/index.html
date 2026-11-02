@@ -35,6 +35,16 @@
     </form>
     <p class="hint">New account? You may need to confirm the email, then return here and sign in.</p>
   </section>
+  <dialog id="signup-dialog" class="auth-dialog" aria-labelledby="signup-dialog-title" aria-describedby="signup-dialog-description">
+    <div class="auth-dialog-content">
+      <p class="eyebrow">CBTeD ACCOUNT</p>
+      <h2 id="signup-dialog-title">Check your email</h2>
+      <p id="signup-dialog-description">Your registration request may have gone through.</p>
+      <p id="signup-dialog-instructions">Open the confirmation email from Supabase and tap its link. Then come back here and sign in.</p>
+      <p class="hint">Check your spam or junk folder too. If an email has already arrived, you do not need to register again.</p>
+      <button id="signup-dialog-close" type="button" autofocus>Got it</button>
+    </div>
+  </dialog>
   <section id="workspace" hidden aria-label="Your private workspace">
     <div class="session-bar">
       <p>Signed in as <strong id="user-email"></strong></p>
