@@ -46,11 +46,24 @@ function requireProject() {
   if (!state.user || !state.project) throw new Error("Sign in and select a project first.");
   return state.project;
 }
+const activeActions = new WeakSet();
 function handle(handler) {
   return async (event) => {
     event?.preventDefault?.();
+    const control = event?.currentTarget;
+    if (control && activeActions.has(control)) return;
+    if (control) {
+      activeActions.add(control);
+      control.setAttribute("aria-busy", "true");
+    }
     try { await handler(event); }
     catch (error) { fail(error, "Operation failed"); }
+    finally {
+      if (control) {
+        activeActions.delete(control);
+        control.removeAttribute("aria-busy");
+      }
+    }
   };
 }
 async function query(promise) {
