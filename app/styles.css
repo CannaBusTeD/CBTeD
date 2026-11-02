@@ -30,6 +30,13 @@ button.secondary:hover:not(:disabled){background:#344b64}
 .actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px}
 .status{background:#17354a;border-left:5px solid var(--accent);padding:12px 14px;border-radius:8px;margin:14px 0 20px}
 .status.error{background:#4e2531;border-color:var(--danger)}
+/* Native, accessible registration/confirmation dialog. */
+.auth-dialog{box-sizing:border-box;width:min(560px,calc(100vw - 28px));max-height:85vh;overflow-y:auto;margin:auto;padding:0;border:2px solid var(--accent);border-radius:16px;background:var(--panel);color:var(--text);box-shadow:0 25px 75px #000c;overflow-wrap:anywhere}
+.auth-dialog::backdrop{background:rgba(3,10,19,.83)}
+.auth-dialog-content{padding:clamp(18px,4vw,28px)}
+.auth-dialog h2{font-size:clamp(1.25rem,4vw,1.7rem);margin:10px 0 16px}
+.auth-dialog button{display:block;width:100%;margin-top:20px}
+
 .hint{color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
 .section-heading{display:flex;justify-content:space-between;align-items:center;gap:14px}
 .session-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin:8px 0 20px}
