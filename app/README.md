@@ -1,0 +1,105 @@
+# CBTeD Project Manager
+
+Status: **First browser application implemented in source**, not yet proven live for an authenticated user. The application is committed to the public CBTeD GitHub repository; private user content stays in Supabase.
+
+## Purpose
+
+This minimal accessible interface connects the existing ten-table CBTeD database and private storage bucket to user authentication and a shared project workspace.
+
+It supports:
+
+- Email/password sign-up, sign-in, persistent session and sign-out via Supabase Auth.
+- Creating and switching between private owner-scoped projects.
+- Creating source documents, saving separate numbered text versions, and reopening specific versions without overwriting earlier text.
+- Explicit source-version approvals (append-only decisions).
+- Storing versioned project-specific rules, corrections and decisions, with studio scope.
+- Uploading private project assets under unique paths and downloading them with the signed-in user's session.
+- Creating writing/visual/animation task records with requested output counts.
+- Recording source-grounded Writing → Visual handoffs after approval.
+- Reading stored source, assets, tasks and handoffs across sessions.
+
+It does **not** yet run the three creative studio agents or image/video tools. Handoffs and tasks are durable records, not proof that an external generation has occurred.
+
+## Technical architecture
+
+- Static, accessible HTML/CSS/JavaScript front end: `app/`.
+- Pinned Supabase browser SDK: `@supabase/supabase-js@2.118.0` via ESM CDN.
+- Live database: dedicated Supabase project **CBTeD**.
+- Storage: private `cbted-project-assets` bucket; its policies require authenticated ownership of the project.
+- Browser API configuration: a deployed **public-only** Supabase Edge Function named `cbted-public-config`. It returns the project's URL, private bucket ID and **publishable** (not secret) key.
+- No password, secret key, service-role key, unpublished writing, photographs or private project content is committed to the public repository.
+- Deployment: `.github/workflows/deploy-cbted-manager.yml` publishes the `app/` directory to GitHub Pages. The repository owner must first enable GitHub Pages with **Source: GitHub Actions**, if not already enabled.
+- Source sanity checks: `node --check app/app.js`, `node --check app/config.js` and `node tests/check-project-manager.mjs` run before the Pages deployment attempt.
+
+## One-time setup before sign-in can be tested
+
+### 1. Enable GitHub Pages
+
+In GitHub, open **CannaBusTeD/CBTeD → Settings → Pages**. Under **Build and deployment → Source**, choose **GitHub Actions**.
+
+After the workflow succeeds, the expected site address is:
+
+`https://cannabusted.github.io/CBTeD/`
+
+This is an expected address, not a promise that Pages is already enabled or the deployment has completed. Check the repository Actions page and the deployed URL.
+
+### 2. Set allowed authentication URLs
+
+In **Supabase → CBTeD → Authentication → URL Configuration**:
+
+- Set **Site URL** to the actual published GitHub Pages address.
+- Add that exact URL to **Redirect URLs** (with a suitable trailing-slash path pattern if required).
+
+Without the correct URL settings, the email confirmation link may redirect somewhere unrelated. Email confirmation is normally enabled for hosted Supabase Auth projects.
+
+### 3. Create a CBTeD application account
+
+In the published app, create an account using an email address and a new strong password. This user account is **separate** from the Supabase dashboard owner's account and from the project's PostgreSQL database password. Follow the email confirmation link, return to the app and sign in.
+
+Never share the account password in a chat, GitHub, a front-end file, or a screenshot.
+
+## First real user acceptance test
+
+With a signed-in browser session:
+
+1. Create a private project and reopen it.
+2. Save a small writing source as version 1; save a change as version 2; switch back to inspect version 1.
+3. Approve a version and create the source's Writing → Visual handoff. Confirm the approved source version and handoff records persist.
+4. Save one project-specific correction and confirm it appears in the current rules list.
+5. Upload a small image or text file; download it again from the file list.
+6. Create a studio task; sign out and sign in again; verify that all earlier records remain.
+7. Use a second distinct account to verify it **cannot** list, read, update, or download the first account's project records and files.
+
+Before these real sign-in and cross-account tests pass, do not claim that the end-to-end app or isolation is fully validated.
+
+## File and project safety
+
+- Each upload path follows `<authenticated-user-id>/<owned-project-id>/<category>/<unique-name>`.
+- Categories are `writing`, `references`, `images`, `videos`, `audio`, `exports`, `other`.
+- Storage policies currently allow authenticated owner-scoped **INSERT** and **SELECT**, not update/delete; every new version gets a unique file path.
+- User content is private in Supabase; the hosted HTML/JS is necessarily public on GitHub Pages.
+- The client uses only a publishable key with Supabase row-level security. It never has elevated database access.
+- File size and storage availability still depend on the Supabase subscription and current platform limits.
+- Browser tab and network failures can interrupt file uploads. A file might upload before its metadata insert fails; the app reports the private path in that case.
+- Document version-number collisions under simultaneous editing may require a future atomic server-side version service.
+
+## Known missing capabilities
+
+- A deployed three-studio coordinator/MCP server invoking actual writing, image or video providers.
+- Real artist/character reference-role selectors and specialist studio controls.
+- Project collaboration/team memberships; v1 project permissions are single-owner.
+- Asset transforms, thumbnails, resumable large-video uploads, background task queue and retry orchestration.
+- Access-control tests with real independent user accounts.
+- Automated live-browser tests and verified GitHub Pages publication.
+
+## Useful source paths
+
+- `core/Master_Workflow_Rules_Universal_Creative_Execution.txt`
+- `core/CBTeD_Core.md`
+- `core/Shared_Project_Database.md`
+- `writing/Writing_Studio_Operating_Procedure.md`
+- `visual/Visual_Studio_Operating_Procedure.md`
+- `animation/Animation_Studio.md`
+- `supabase/functions/cbted-public-config/index.ts`
+
+CBTeD source work should continue sequentially, preserving existing user rules and approved source material. Never claim a workflow is complete when only its plan or task record exists.
