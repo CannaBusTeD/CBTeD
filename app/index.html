@@ -54,7 +54,7 @@
       <aside class="panel" aria-labelledby="projects-heading">
         <h2 id="projects-heading">Projects</h2>
         <form id="project-form">
-          <label>New project name <input id="project-title" name="project-title" placeholder="e.g. A new song" maxlength="200" required></label>
+          <label>New project name <input id="project-title" name="project-title" placeholder="e.g. An Ordinary Tuesday" maxlength="200" required></label>
           <button type="submit">Create project</button>
         </form>
         <p id="project-empty" class="hint">You have no projects yet.</p>
@@ -67,40 +67,56 @@
           <p id="project-summary" class="hint"></p>
         </section>
         <section class="panel" aria-labelledby="writing-heading">
-          <div class="section-heading"><h2 id="writing-heading">Writing and source versions</h2><span class="pill">Writing</span></div>
-          <p>The original source is never overwritten. Every save creates a numbered version.</p>
+          <div class="section-heading"><h2 id="writing-heading">Writing Studio: your words and ideas</h2><span class="pill">Writing</span></div>
+          <p>Keep what you've already written separate from your ideas and possible rewrites. You can start with just an idea. Each time you save, CBTeD keeps a new version without replacing the earlier one.</p>
           <div class="fields">
-            <label>Existing source
-              <select id="source-select"><option value="">New source</option></select>
+            <label for="source-select">Choose writing you've already saved
+              <select id="source-select"><option value="">Start something new</option></select>
             </label>
-            <label>Saved version
-              <select id="version-select" disabled><option value="">No saved version</option></select>
+            <label for="version-select">Choose an earlier saved draft
+              <select id="version-select" disabled><option value="">No drafts saved yet</option></select>
             </label>
           </div>
           <form id="source-form">
             <div class="fields">
-              <label>Source title <input id="source-title" maxlength="200" required placeholder="Song, poem or script title"></label>
-              <label>Source type
+              <label for="source-title"><span id="writing-title-label">Song title</span>
+                <input id="source-title" maxlength="200" required placeholder="Type your song title here">
+              </label>
+              <label for="source-type">What are you writing?
                 <select id="source-type">
-                  <option value="lyrics">Lyrics</option><option value="poem">Poem</option>
+                  <option value="lyrics">Song lyrics</option><option value="poem">Poem</option>
                   <option value="story">Story</option><option value="script">Script</option>
-                  <option value="treatment">Treatment</option><option value="notes">Notes</option>
-                  <option value="other">Other</option>
+                  <option value="treatment">Film or story treatment</option><option value="notes">Notes</option>
+                  <option value="other">Other writing</option>
                 </select>
               </label>
             </div>
-            <label>Source text <textarea id="source-text" rows="12" required spellcheck="true" placeholder="Paste or write the authoritative source here"></textarea></label>
+            <div class="writing-field">
+              <label for="source-text" id="writing-current-label">My current lyrics</label>
+              <p id="writing-current-help" class="hint">These are the lyrics you've written already. Leave this blank if you're still working out the idea.</p>
+              <textarea id="source-text" rows="10" spellcheck="true" aria-describedby="writing-current-help" placeholder="My current lyrics: paste or type the lyrics you have so far."></textarea>
+            </div>
+            <div class="writing-field">
+              <label for="writing-ideas" id="writing-ideas-label">My ideas</label>
+              <p id="writing-ideas-help" class="hint">Keep themes, scenes, images, rough thoughts and notes here. They won't be treated as finished lyrics.</p>
+              <textarea id="writing-ideas" class="compact-textarea" rows="5" spellcheck="true" aria-describedby="writing-ideas-help" placeholder="My ideas: what I want to write about, what happens, and anything I don't want to forget."></textarea>
+            </div>
+            <div class="writing-field">
+              <label for="writing-suggestions" id="writing-suggestions-label">Suggested lyrics / alternative lines</label>
+              <p id="writing-suggestions-help" class="hint">Put possible rewrites or suggested lines here. They remain suggestions and won't replace your current lyrics.</p>
+              <textarea id="writing-suggestions" class="compact-textarea" rows="5" spellcheck="true" aria-describedby="writing-suggestions-help" placeholder="Suggested lyrics: alternative lines or possible verses to consider later."></textarea>
+            </div>
             <div class="actions">
-              <button type="submit">Save new version</button>
-              <button type="button" id="new-source" class="secondary">Start another source</button>
+              <button type="submit">Save my draft</button>
+              <button type="button" id="new-source" class="secondary">Start a different piece of writing</button>
             </div>
           </form>
-          <p id="version-info" class="hint" aria-live="polite">No source version selected.</p>
+          <p id="version-info" class="hint" aria-live="polite">Nothing saved yet. Enter a title and something in at least one writing box.</p>
           <div class="actions">
-            <button type="button" id="approve-source" class="secondary" disabled>Approve current version</button>
-            <button type="button" id="handoff-source" class="secondary" disabled>Prepare Visual handoff</button>
+            <button type="button" id="approve-source" class="secondary" disabled>Approve this saved draft</button>
+            <button type="button" id="handoff-source" class="secondary" disabled>Prepare approved writing for Visual Studio</button>
           </div>
-          <p id="approval-info" class="hint">Approval is an explicit user decision, never automatic.</p>
+          <p id="approval-info" class="hint">You choose which saved version is approved. Ideas and suggested lines stay separate from your current writing.</p>
         </section>
         <section class="panel" aria-labelledby="rules-heading">
           <h2 id="rules-heading">Project rules and corrections</h2>
@@ -110,12 +126,12 @@
               <label>Applies to
                 <select id="rule-scope"><option value="project">Whole project</option><option value="writing">Writing</option><option value="visual">Visual</option><option value="animation">Animation</option></select>
               </label>
-              <label>Rule name <input id="rule-key" maxlength="160" placeholder="e.g. Character wardrobe" required></label>
+              <label>Name this rule <input id="rule-key" maxlength="160" placeholder="e.g. Main character always wears a black hat" required></label>
               <label>Kind
                 <select id="rule-kind"><option value="constraint">Constraint</option><option value="correction">Correction</option><option value="decision">Decision</option><option value="preference">Preference</option><option value="reference">Reference</option></select>
               </label>
             </div>
-            <label>Exact rule text <textarea id="rule-body" rows="4" required></textarea></label>
+            <label>Describe the rule or correction <textarea id="rule-body" rows="4" required placeholder="Write exactly what must stay the same or what needs to change."></textarea></label>
             <button type="submit">Save rule revision</button>
           </form>
           <h3>Current project rules</h3>
@@ -156,7 +172,7 @@
               </label>
               <label>Requested separate outputs <input id="task-units" type="number" min="1" max="1000" value="1" required></label>
             </div>
-            <label>Work to do <input id="task-operation" maxlength="300" placeholder="e.g. Create 6 distinct images" required></label>
+            <label>What do you want done? <input id="task-operation" maxlength="300" placeholder="e.g. Create six separate 16:9 images from my lyrics" required></label>
             <button type="submit">Create task</button>
           </form>
           <h3>Project tasks</h3>
