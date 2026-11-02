@@ -12,6 +12,8 @@ It supports:
 - Accessible, mobile-friendly confirmation dialog after sign-up without a session, with instructions to check inbox/spam and confirm the email; the same dialog distinguishes an existing unconfirmed account from Supabase's short security cooldown. It never promises that a rate-limited request succeeded.
 - Creating and switching between private owner-scoped projects.
 - Creating source documents, saving separate numbered text versions, and reopening specific versions without overwriting earlier text.
+- Writing fields explicitly labelled **Song title**, **My current lyrics**, **My ideas**, and **Suggested lyrics / alternative lines**, with helpful example text inside each box. Labels change appropriately for poems, stories, scripts, treatments and notes.
+- Each saved writing version stores the current text, personal ideas and proposed alternatives in separate columns. Users can save an ideas-only version before drafting any lyrics; suggested alternatives never overwrite the current writing.
 - Explicit source-version approvals (append-only decisions).
 - Storing versioned project-specific rules, corrections and decisions, with studio scope.
 - Uploading private project assets under unique paths and downloading them with the signed-in user's session.
@@ -64,7 +66,7 @@ Never share the account password in a chat, GitHub, a front-end file, or a scree
 With a signed-in browser session:
 
 1. Create a private project and reopen it.
-2. Save a small writing source as version 1; save a change as version 2; switch back to inspect version 1.
+2. Create a song with a clear **Song title** and text in **My ideas** only; save Version 1. Add **My current lyrics** and **Suggested lyrics**, save Version 2, then switch back to Version 1 to confirm that each of the three boxes restores its original contents.
 3. Approve a version and create the source's Writing → Visual handoff. Confirm the approved source version and handoff records persist.
 4. Save one project-specific correction and confirm it appears in the current rules list.
 5. Upload a small image or text file; download it again from the file list.
