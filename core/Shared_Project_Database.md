@@ -24,7 +24,7 @@ Status: **Initial database schema and private project asset storage deployed**. 
 | --- | --- | --- |
 | `projects` | Project identity, owner, title, description, active/archive status, current studio | `owner_id` references `auth.users.id`; only owner may read, create or update |
 | `sources` | Logical writing/source document and its type | Belongs to a project; can have many source versions |
-| `source_versions` | Immutable draft/approved-source candidates, version number, text or private storage path and previous-version reference | Belongs to a source in the *same project*; unique source/version number |
+| `source_versions` | Immutable numbered writing snapshots with separate `content` (current lyrics/writing), `ideas` (user notes) and `suggested_text` (alternative wording), plus optional storage path and previous-version reference | Belongs to a source in the *same project*; unique source/version number; a version can contain ideas alone |
 | `project_rules` | Versioned project rules, corrections, decisions, preferences and continuity constraints | Scope may be project/writing/visual/animation; revision numbers, supersession links, locked flag |
 | `assets` | Metadata and private storage paths for uploaded references and generated files | Role, dimensions, duration, MIME type, linked source version; the private bucket is provisioned, but file uploads are not yet connected |
 | `tasks` | Studio activity and step/progress tracking | Writing/visual/animation, operation, status, current step, requested and completed units, input sources/assets |
@@ -47,6 +47,14 @@ Project-scoped foreign keys include the project ID, preventing a task, asset, so
 8. `handoffs` connects independent studios while leaving source and prior results intact.
 9. `activity_events` records significant actions for traceability.
 
+
+## Writing-field separation
+
+- Applied Supabase migration: `20261102231044_separate_writing_draft_ideas_suggestions`.
+- Additive columns on `public.source_versions`: `ideas text`, `suggested_text text`; the existing `content` column is unchanged.
+- The nonempty-version check now accepts existing content, ideas, suggested text or a storage file. A user can save ideas before writing any lyrics.
+- Every version retains all three fields as one snapshot, but each field stays clearly separated. Suggested lines do **not** replace current lyrics or become automatically approved.
+- Migration SQL is retained under `supabase/recorded-migrations/` as an already-applied reference, not a script to run again.
 
 ## Private asset storage configuration
 
