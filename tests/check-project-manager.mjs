@@ -14,8 +14,17 @@ assert.deepEqual(missing, [], "JavaScript refers to HTML IDs that do not exist")
 
 for (const required of [
   "auth-form", "project-form", "source-form", "rule-form", "file-form",
-  "task-form", "source-select", "version-select", "source-text", "project-list"
+  "task-form", "source-select", "version-select", "source-text", "project-list",
+  "signup-dialog", "signup-dialog-title", "signup-dialog-description",
+  "signup-dialog-instructions", "signup-dialog-close"
 ]) assert.ok(actualIds.has(required), "Missing required control: " + required);
+
+assert.match(html, /<dialog id="signup-dialog"/);
+assert.match(html, /aria-labelledby="signup-dialog-title"/);
+assert.match(html, /aria-describedby="signup-dialog-description"/);
+assert.match(js, /showRegistrationNotice\("submitted", email\)/);
+assert.match(js, /showRegistrationNotice\("cooldown", email\)/);
+assert.match(js, /showRegistrationNotice\("unconfirmed", email\)/);
 
 assert.match(js, /signInWithPassword/);
 assert.match(js, /auth\.signUp/);
