@@ -117,3 +117,59 @@ BEGIN
  RETURN v_result;
 END $$;
 REVOKE ALL ON FUNCTION public.cbted_canonical_plan(text,integer,integer) FROM PUBLIC,anon,authenticated;
+
+CREATE OR REPLACE FUNCTION public.cbted_prepare_production(
+ p_project uuid,p_request uuid,p_workflow text,p_instructions text,p_source uuid,p_steps jsonb
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE v_uid uuid:=auth.uid();v_run uuid;v_step jsonb;v_keys text[]:='{}';v_dep text;v_ix int:=0;v_img int;v_vid int;v_normalized jsonb;
+BEGIN
+ IF v_uid IS NULL OR NOT EXISTS(SELECT 1 FROM public.projects WHERE id=p_project AND owner_id=v_uid)
+   THEN RAISE EXCEPTION 'Project access denied';END IF;
+ IF p_workflow NOT IN ('writing','visual','animation','song_video') OR p_instructions IS NULL OR char_length(p_instructions) NOT BETWEEN 1 AND 20000
+   THEN RAISE EXCEPTION 'Invalid production request';END IF;
+ IF jsonb_typeof(p_steps) IS DISTINCT FROM 'array' OR jsonb_array_length(p_steps) NOT BETWEEN 1 AND 200
+   THEN RAISE EXCEPTION 'Invalid production step count';END IF;
+ IF p_source IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.source_versions WHERE id=p_source AND project_id=p_project)
+   THEN RAISE EXCEPTION 'Source version does not belong to project';END IF;
+
+ -- The submitted plan is untrusted, including when it comes from an AI or browser.
+ -- Rebuild the full mandatory graph from canonical, server-owned stage definitions.
+ SELECT
+   count(*) FILTER(WHERE stage->>'agent'='image_generator'),
+   count(*) FILTER(WHERE stage->>'agent'='video_generator')
+ INTO v_img,v_vid FROM jsonb_array_elements(p_steps) AS stage;
+ SELECT coalesce(jsonb_agg(jsonb_build_object(
+   'key',stage->>'key',
+   'agent',stage->>'agent',
+   'studio',stage->>'studio',
+   'kind',stage->>'kind',
+   'depends_on',stage->'depends_on',
+   'approval_required',stage->'approval_required'
+ ) ORDER BY sequence),'[]'::jsonb)
+ INTO v_normalized
+ FROM jsonb_array_elements(p_steps) WITH ORDINALITY AS stages(stage,sequence);
+ IF v_normalized IS DISTINCT FROM public.cbted_canonical_plan(p_workflow,v_img,v_vid)
+ THEN RAISE EXCEPTION 'Workflow violates mandatory canonical stages'; END IF;
+ INSERT INTO public.production_runs(project_id,request_id,workflow,instructions,source_version_id,rules_snapshot)
+ VALUES (p_project,coalesce(p_request,gen_random_uuid()),p_workflow,p_instructions,p_source,public.cbted_locked_rules(p_project))
+ RETURNING id INTO v_run;
+ FOR v_step IN SELECT value FROM jsonb_array_elements(p_steps) LOOP
+   v_ix:=v_ix+1;
+   IF coalesce(v_step->>'key','') !~ '^[a-z][a-z0-9_]{2,119}$' OR v_step->>'key'=ANY(v_keys)
+     OR coalesce(v_step->>'agent','') !~ '^[a-z][a-z0-9_]{2,119}$'
+     OR v_step->>'studio' NOT IN ('writing','visual','audio','animation','core')
+     OR v_step->>'kind' NOT IN ('text','image','video','audio')
+     OR jsonb_typeof(v_step->'depends_on') IS DISTINCT FROM 'array'
+     THEN RAISE EXCEPTION 'Malformed or repeated step';END IF;
+   FOR v_dep IN SELECT jsonb_array_elements_text(v_step->'depends_on') LOOP
+     IF NOT v_dep=ANY(v_keys) THEN RAISE EXCEPTION 'Dependency must precede step';END IF;
+   END LOOP;
+   IF v_step->>'kind' IN ('image','video','audio') AND coalesce((v_step->>'approval_required')::boolean,false)=false
+     THEN RAISE EXCEPTION 'Media execution must require explicit approval';END IF;
+   INSERT INTO public.production_steps(run_id,project_id,sequence_index,step_key,agent,studio,kind,depends_on,approval_required)
+   VALUES(v_run,p_project,v_ix,v_step->>'key',v_step->>'agent',v_step->>'studio',v_step->>'kind',
+     ARRAY(SELECT jsonb_array_elements_text(v_step->'depends_on')),coalesce((v_step->>'approval_required')::boolean,false));
+   v_keys:=array_append(v_keys,v_step->>'key');
+ END LOOP;
+ RETURN v_run;
+END $$;
