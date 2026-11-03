@@ -182,4 +182,58 @@ button[aria-busy="true"]{cursor:progress}
   .brand-studios{font-size:1.6rem}
   .brand-subtitle{font-size:.72rem}
 }
+
+/* CBTeD five-stage application navigation and per-studio workspaces */
+.studio-navigation{
+  border-top:3px solid var(--ruby);
+  background:linear-gradient(130deg,#3a202a,#221c22 58%,#191719);
+}
+.studio-navigation label{font-size:1.04rem;font-weight:800}
+.studio-navigation select{
+  margin-top:12px;min-height:58px;font-size:1rem;font-weight:750;
+  background:#2b1b24;border-color:#d05a6e;
+}
+.studio-page[hidden]{display:none!important}
+.studio-page > .panel:first-child{border-top:2px solid #bf4055}
+.page-save-actions{
+  display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+  margin-top:24px;padding-top:20px;border-top:2px solid #705962;
+}
+.page-save-actions button{min-width:min(100%,230px)}
+.page-save-actions .hint{margin:0}
+.studio-page textarea.compact-textarea{min-height:145px}
+.studio-page textarea{margin-bottom:8px}
+.studio-page fieldset{
+  border:1px solid #8f747e;border-radius:12px;padding:15px;margin:10px 0 18px;
+}
+.studio-page legend{font-size:1.04rem;font-weight:800;padding:0 8px}
+.stage-choices label{
+  display:flex;align-items:center;gap:12px;border-bottom:1px solid #564650;
+  padding:12px 3px;margin:0;font-size:1rem;font-weight:700;
+}
+.stage-choices label:last-child{border-bottom:0}
+.stage-choices input[type=checkbox]{
+  appearance:auto;width:25px;height:25px;min-height:25px;flex:none;
+  margin:0;accent-color:#f26a80;
+}
+.run-warning{
+  background:#30232a;border-left:4px solid #f3b5bd;
+  padding:15px;border-radius:8px;color:#fff8f7;font-weight:600;
+}
+.preflight{
+  border:1px solid #759681;background:#173626;color:#f0fff4;
+  padding:14px;border-radius:10px;margin-block:18px;
+}
+.preflight.has-errors{
+  border-color:#e39ca5;background:#422632;color:#fff5f6;
+}
+#run-submit{font-size:1.06rem;padding:15px 18px;min-height:54px}
+#run-submit:disabled{filter:grayscale(.8)}
+/* The chosen studio fills the right-hand work area; scroll stays simple. */
+@media(max-width:720px){
+  .studio-navigation select{font-size:.94rem}
+  .page-save-actions button{width:100%}
+  .stage-choices label{font-size:.96rem}
+}
+
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
