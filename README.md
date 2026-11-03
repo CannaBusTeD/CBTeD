@@ -24,10 +24,17 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 ### ChatGPT-native CBTeD MCP bridge (deployed, not yet linked)
 
 - Supabase Edge Function cbted-mcp is deployed and ACTIVE. Its 13 MCP tools return complete master/studio instructions and manage owner-scoped project records.
-- The server bundles 12 original GitHub rule documents, with source SHA identifiers.
+- The server bundles 13 original GitHub rule documents, including the mandatory post-draft lyric editorial gate, with source SHA identifiers.
 - OAuth metadata and a one-time consent page have been implemented, but Supabase OAuth Server activation, ChatGPT registration and authenticated end-to-end tests are outstanding.
 - Creative generation is performed by ChatGPT using its own available tools, not by the MCP server or a separate website.
 - See [MCP integration instructions](mcp/README.md).
+
+### New song editorial quality gate
+
+- `writing/Lyric_Post_Draft_Editorial_Gate.md` defines the mandatory post-draft critique, recommendations, and rewrite as three distinct stages for CBTeD-authored new songs.
+- For song-plus-thumbnail requests, submit the thumbnail when the song concept is established, then execute the three editorial stages while the image processes. Final proofreading and image-to-revised-lyric alignment checks must precede delivery.
+- The original universal master rules are **unchanged**; this is additional song-specific operating discipline.
+- The original CBTeD plugin package version 0.6.3 adds the lyric-editorial-gate skill while retaining its identity, original instructions, images, and MCP configuration.
 
 ### CBTeD Studios project manager (v2)
 
