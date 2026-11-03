@@ -23,6 +23,12 @@ It supports:
 
 It does **not** yet run the three creative studio agents or image/video tools. Handoffs and tasks are durable records, not proof that an external generation has occurred.
 
+## CBTeD Studios branding
+
+The artist's approved circular CBTeD emblem is installed as the website header mark and favicon in `app/assets/cbted-emblem.webp`. The site's interface now uses the approved ruby-red, gunmetal and red-velvet palette, with high-contrast controls and accessibility-aware keyboard focus. The source design is documented in `design/Branding.md`.
+
+The website icon is a small transparent WebP optimisation of the user-supplied original, not a newly generated substitute or the full-resolution master. The word "STUDIOS" in the header is accessible styled text. User drafts and private assets remain in Supabase, never in public GitHub.
+
 ## Technical architecture
 
 - Static, accessible HTML/CSS/JavaScript front end: `app/`.
