@@ -259,7 +259,14 @@
               <textarea id="visual-restrictions" class="compact-textarea" rows="3" placeholder="Unwanted repeats, incorrect colours or clothing, mistakes to prevent."></textarea>
             </label>
             <h3>Reference images</h3>
-            <p class="hint">Upload reference photos under Project setup → Private project files. Then return here and assign each file its proper role.</p>
+            <p class="hint">Upload character, clothing, style, location or object images, then select the correct role for each.</p>
+            <div class="asset-upload-widget">
+              <label for="visual-upload-file">Add reference photograph(s) to this project
+                <input id="visual-upload-file" type="file" accept="image/*" multiple>
+              </label>
+              <button id="visual-upload-button" type="button" class="secondary">Upload Visual References</button>
+              <p id="visual-upload-status" class="hint" role="status" aria-live="polite">Your reference images stay private to this project.</p>
+            </div>
             <div class="fields">
               <label for="visual-character-asset">Character identity photo
                 <select id="visual-character-asset"><option value="">No character photo selected</option></select>
@@ -273,10 +280,25 @@
               <label for="visual-object-asset">Prop or object reference image
                 <select id="visual-object-asset"><option value="">No object image selected</option></select>
               </label>
+              <label for="visual-clothing-asset">Clothing or wardrobe reference
+                <select id="visual-clothing-asset"><option value="">No clothing image selected</option></select>
+              </label>
+              <label for="visual-composition-asset">Camera framing or composition reference
+                <select id="visual-composition-asset"><option value="">No composition image selected</option></select>
+              </label>
             </div>
-            <label for="visual-thumbnail-title">Exact thumbnail or poster text, if needed
-              <input id="visual-thumbnail-title" placeholder="Type the exact title and artist wording here">
-            </label>
+            <div class="fields">
+              <label for="visual-thumbnail-policy">Should a thumbnail count as one of the images?
+                <select id="visual-thumbnail-policy">
+                  <option value="none">No thumbnail requested</option>
+                  <option value="included">Yes, include it in the total count</option>
+                  <option value="additional">Create one extra thumbnail beyond the count</option>
+                </select>
+              </label>
+              <label for="visual-thumbnail-title">Exact thumbnail or poster text, if needed
+                <input id="visual-thumbnail-title" placeholder="Type the exact title and artist wording here">
+              </label>
+            </div>
             <div class="page-save-actions">
               <button type="submit">Save Visual Setup</button>
               <p id="visual-save-info" class="hint" role="status" aria-live="polite">No Visual setup saved yet.</p>
@@ -295,6 +317,13 @@
             <label for="animation-start-asset">Approved starting image (if available)
               <select id="animation-start-asset"><option value="">Select an image after uploading it</option></select>
             </label>
+            <div class="asset-upload-widget">
+              <label for="animation-upload-file">Upload the image to animate
+                <input id="animation-upload-file" type="file" accept="image/*">
+              </label>
+              <button id="animation-upload-button" type="button" class="secondary">Upload Start Image</button>
+              <p id="animation-upload-status" class="hint" role="status" aria-live="polite">Upload first, then select the approved start image above.</p>
+            </div>
             <label for="animation-goal">What happens in this scene?
               <textarea id="animation-goal" rows="5" required placeholder="Describe the action, change and emotional beat that should unfold in the video."></textarea>
             </label>
