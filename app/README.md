@@ -1,6 +1,6 @@
 # CBTeD Project Manager
 
-Status: **First browser application implemented in source**, not yet proven live for an authenticated user. The application is committed to the public CBTeD GitHub repository; private user content stays in Supabase.
+Status: **CBTeD project manager v2 committed**. The user has already confirmed successful website sign-in and real project creation; the new five-workspace UI and its saved Visual/Animation forms still require live authenticated browser acceptance testing. Private user content stays in Supabase.
 
 ## Purpose
 
@@ -28,6 +28,22 @@ It does **not** yet run the three creative studio agents or image/video tools. H
 The artist's approved circular CBTeD emblem is installed as the website header mark and favicon in `app/assets/cbted-emblem.webp`. The site's interface now uses the approved ruby-red, gunmetal and red-velvet palette, with high-contrast controls and accessibility-aware keyboard focus. The source design is documented in `design/Branding.md`.
 
 The website icon is a small transparent WebP optimisation of the user-supplied original, not a newly generated substitute or the full-resolution master. The word "STUDIOS" in the header is accessible styled text. User drafts and private assets remain in Supabase, never in public GitHub.
+
+## CBTeD v2: studio pages and GO
+
+The user chooses a single page with **Which studio would you like to work in?**
+
+1. **Project setup**: project title/description, versioned rules, uploaded private files; Save Project Details is placed at the bottom of the full page. Rules and file uploads have their own explicit Save/Upload controls.
+2. **Writing Studio**: exact current lyrics/writing, personal ideas, suggested alternatives, saved draft versions and explicit approval. Save Writing Draft is at the bottom.
+3. **Visual Studio**: image purpose, exact source moment, separate image count, ratio, style/world, characters, composition, continuity, restrictions, assigned character/style/location/object image references and exact thumbnail text. Save Visual Setup creates an **append-only version** in `public.studio_settings`.
+4. **Animation Studio**: optional approved writing, uploaded start image, clip count, duration, ratio, desired motion, camera movement, atmosphere, audio, continuity and preferred generation service. Save Animation Setup creates another append-only setup version.
+5. **GO / Production**: choose one or more saved studios, validate that their settings have been saved, and prepare an immutable project/run snapshot. A single authenticated SQL transaction (`public.prepare_project_run`) creates the `project_runs` row and one **blocked** task per selected studio; those tasks have zero completed outputs. The user may download the real JSON production brief. GO is at the bottom of the page.
+
+**Important limitations:** GO **does not generate** lyrics, images or videos. It executes the preproduction recording workflow only. The actual creative providers and studio orchestration tools are not yet connected to the public website; no image/video output will be labelled completed without a real provider result. Selecting a provider name in Animation Studio saves a preference, **not** a connected account.
+
+Unsaved changes to selected studio settings, writing drafts or project details prevent GO from silently using older versions. A previously approved writing version can be selected explicitly for Visual and Animation; the project also supports independent visual and animation concepts when source text isn't needed.
+
+The app has been updated with source checks for the five pages, form controls, installed emblem and GO RPC integration. Database verification included a rollback-only authenticated transaction that created one production run and its task; the test records were rolled back (no dummy work remains). A second simulated identity returned zero readable projects.
 
 ## Technical architecture
 
@@ -67,7 +83,7 @@ In the published app, create an account using an email address and a new strong 
 
 Never share the account password in a chat, GitHub, a front-end file, or a screenshot.
 
-## First real user acceptance test
+## First real user acceptance test (updated for v2)
 
 With a signed-in browser session:
 
