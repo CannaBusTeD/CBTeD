@@ -1,6 +1,7 @@
 // CBTeD authenticated orchestration gateway. GitHub is the code source of truth.
 // Native ChatGPT tools cannot be intercepted here. Backend-managed execution IS gated.
 import {AGENTS,buildPlan,authorisation,modelInstruction} from "../_shared/production.mjs";
+import {routeSpecialist} from "../_shared/specialist-router.mjs";
 const ROOT=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function key(){
@@ -198,6 +199,11 @@ Deno.serve(async(request)=>{
   if(Number(request.headers.get("content-length")||0)>300000)return json({error:"Body too large"},413);
   const body=await request.json();
   if(!body||typeof body!=="object"||Array.isArray(body))throw Error("Invalid request");
+  if(path==="route-specialist"){
+   // Independent specialist routing does not register a run, charge a provider or demand other studios.
+   const route=routeSpecialist(body);
+   return json(route);
+  }
   if(path==="plan"){
    const plan=preview(body);
    if(body.intent!=="execute")return json({...plan,created:false,executed:false});
