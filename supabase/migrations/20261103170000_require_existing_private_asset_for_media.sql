@@ -1,4 +1,5 @@
--- Tighten private media proof: a metadata row alone is not a real output.\nCREATE OR REPLACE FUNCTION public.cbted_finish_production_step(
+-- Tighten private media proof: a metadata row alone is not a real output.
+CREATE OR REPLACE FUNCTION public.cbted_finish_production_step(
  p_run uuid,p_step text,p_result text,p_text text DEFAULT NULL,p_asset uuid DEFAULT NULL,p_evidence jsonb DEFAULT '{}'::jsonb
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_uid uuid:=auth.uid();v_r public.production_runs%ROWTYPE;v_s public.production_steps%ROWTYPE;v_left int;
