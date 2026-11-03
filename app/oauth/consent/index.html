@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connect CBTeD to ChatGPT</title>
+  <meta name="description" content="Authorize ChatGPT to access your private CBTeD creative projects.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://esm.sh; connect-src https://dmzzyfiwtosxtyekpbfi.supabase.co https://esm.sh; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; object-src 'none'">
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#171519;color:#fff}
+    body{max-width:41rem;margin:0 auto;padding:clamp(1rem,5vw,3rem);line-height:1.6}
+    h1{line-height:1.2;font-size:clamp(1.75rem,6vw,2.4rem);margin:0 0 1rem}
+    h2{font-size:1.2rem}
+    .panel{background:#242127;border:1px solid #696169;border-radius:14px;padding:1.2rem;margin:1rem 0}
+    button,input{font:inherit;box-sizing:border-box}
+    label{display:block;font-weight:650;margin-top:1rem}
+    input{display:block;width:100%;border:2px solid #9e939e;background:#100d11;color:#fff;padding:.75rem;border-radius:8px}
+    button{border:2px solid #ffc0c0;border-radius:10px;background:#9c1730;color:#fff;padding:.75rem 1rem;font-weight:700;margin:.6rem .5rem .2rem 0;cursor:pointer}
+    button.secondary{background:transparent}
+    button:focus-visible,input:focus-visible,a:focus-visible{outline:4px solid #f6d66f;outline-offset:4px}
+    button:disabled{opacity:.6;cursor:progress}
+    a{color:#ffb0bd}
+    #status{min-height:2rem}
+    .error{color:#ffc3c3}
+    code{overflow-wrap:anywhere}
+    [hidden]{display:none!important}
+    ul{padding-left:1.4rem}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Connect CBTeD to ChatGPT</h1>
+    <p>This one-time sign-in authorises ChatGPT to access your private CBTeD project records. Writing, image and other creative work will still happen inside ChatGPT.</p>
+    <p id="status" role="status" aria-live="polite">Checking connection…</p>
+    <section id="signin" class="panel" hidden>
+      <h2>Sign in to your CBTeD account</h2>
+      <form id="signin-form">
+        <label for="email">Email</label><input id="email" type="email" autocomplete="email" required>
+        <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+        <button id="signin-button" type="submit">Sign in</button>
+      </form>
+      <p><a href="../../">Manage or create your CBTeD account</a></p>
+    </section>
+    <section id="consent" class="panel" hidden>
+      <h2>Review the requested access</h2>
+      <p>Signed in as <strong id="signed-in-as"></strong>.</p>
+      <p>Application: <strong id="client-name"></strong></p>
+      <p>Destination: <code id="redirect-uri"></code></p>
+      <p>Permissions requested:</p>
+      <ul id="scopes"></ul>
+      <p>Granting access lets ChatGPT read and manage your CBTeD projects under your existing account permissions. It does not grant access to your Supabase dashboard or database secrets.</p>
+      <button id="approve" type="button">Approve ChatGPT connection</button>
+      <button id="deny" type="button" class="secondary">Deny</button>
+      <button id="switch-account" type="button" class="secondary">Use another CBTeD account</button>
+    </section>
+  </main>
+  <script type="module" src="./consent.js"></script>
+</body>
+</html>
