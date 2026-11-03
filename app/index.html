@@ -96,10 +96,6 @@
             <label for="project-description">What is this project about?
               <textarea id="project-description" class="compact-textarea" rows="5" placeholder="Describe your song, story, film, video or creative project."></textarea>
             </label>
-            <div class="page-save-actions">
-              <button type="submit">Save Project Details</button>
-              <p id="project-save-info" class="hint" role="status" aria-live="polite">Changes to the title or description are saved here.</p>
-            </div>
           </form>
         </section>
           <section class="panel" aria-labelledby="rules-heading">
@@ -146,6 +142,12 @@
           <p id="files-empty" class="hint">No files uploaded.</p>
           <ul id="files-list" class="clean-list"></ul>
         </section>
+          <section class="panel page-save-footer" aria-label="Save this project's details">
+            <div class="page-save-actions">
+              <button type="submit" form="project-settings-form">Save Project Details</button>
+              <p id="project-save-info" class="hint" role="status" aria-live="polite">Project title and description are saved here. Rules and files have their own save and upload controls.</p>
+            </div>
+          </section>
         </div>
         <div id="page-writing" class="studio-page" data-studio-page="writing" hidden>
           <section class="panel" aria-labelledby="writing-heading">
@@ -355,14 +357,7 @@
               <label><input id="run-animation" type="checkbox"> Animation: use my saved video setup</label>
             </fieldset>
             <div id="run-preflight" class="preflight" role="status" aria-live="polite">Select stages to check what is ready.</div>
-            <div class="page-save-actions">
-              <button id="run-submit" type="submit">GO: Prepare Production Run</button>
-              <p id="run-status" class="hint" role="status" aria-live="polite">Nothing started yet.</p>
-            </div>
           </form>
-          <div class="actions">
-            <button type="button" id="download-brief" class="secondary" disabled>Download latest production brief</button>
-          </div>
           <h3>Previous production runs</h3>
           <p id="runs-empty" class="hint">No production runs saved yet.</p>
           <ul id="runs-list" class="clean-list"></ul>
@@ -390,6 +385,13 @@
           <p id="handoffs-empty" class="hint">No handoffs recorded.</p>
           <ul id="handoffs-list" class="clean-list"></ul>
         </section>
+          <section class="panel page-save-footer" aria-label="Run the selected production stages">
+            <div class="page-save-actions">
+              <button id="run-submit" type="submit" form="run-form">GO: Prepare Production Run</button>
+              <p id="run-status" class="hint" role="status" aria-live="polite">Nothing started yet.</p>
+              <button type="button" id="download-brief" class="secondary" disabled>Download latest production brief</button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
