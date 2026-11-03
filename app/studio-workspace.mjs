@@ -354,41 +354,32 @@ export function createStudioWorkspace({ db, getContext, message, refreshProjects
     const selection = Object.fromEntries(stages.map((studio) => [studio,true]));
     const requestId = crypto.randomUUID();
     message("Preparing a traceable production run…");
-    const run = await runQuery(db.from("project_runs").insert({
-      project_id: project.id, request_id: requestId,
-      stage_selection: selection, snapshot, status: "prepared"
-    }).select("id,status,created_at,stage_selection,snapshot").single());
-    // Save one explicit blocked task per requested studio. No unperformed output is
-    // recorded as completed. The retained run snapshot allows safe recovery.
     const tasks = [];
     for (const studio of stages) {
       const configuration = state.settings[studio]?.settings || {};
       const units = studio === "writing" ? 1 : Number(configuration[studio + "-count"]) || 1;
       tasks.push({
-        project_id: project.id, run_id: run.id, studio,
+        studio,
         operation: studio === "writing" ? "Writing Studio from saved source" :
           studio === "visual" ? "Generate separate images from saved Visual Studio setup" :
           "Animate separate clips from saved Animation Studio setup",
-        status: "blocked", current_step: "Awaiting connected and authorised creative execution provider",
-        requested_units: units, completed_units: 0,
+        requested_units: units,
         source_version_id: studio === "writing" ? context.version?.id || null :
           state.settings[studio]?.source_version_id || null,
         start_asset_id: studio === "animation" ? configuration["animation-start-asset"] || null : null,
-        requirements: {
-          source: "saved_project_run", run_id: run.id,
-          studio_setup_version: state.settings[studio]?.version_number || null,
-          provider_connected: false
-        }
+        studio_setup_version: state.settings[studio]?.version_number || null
       });
     }
-    try {
-      await runQuery(db.from("tasks").insert(tasks).select("id,studio,status,run_id"));
-    } catch (error) {
-      await loadRuns();
-      text("run-status", "The production snapshot was saved, but task creation failed. " +
-        "The run remains recoverable. " + (error?.message || ""));
-      throw error;
-    }
+    // One authenticated, atomic database transaction records both the run
+    // and all its blocked tasks. Failed requests leave no partial new run.
+    const runId = await runQuery(db.rpc("prepare_project_run", {
+      p_project_id: project.id,
+      p_request_id: requestId,
+      p_stage_selection: selection,
+      p_snapshot: snapshot,
+      p_task_specs: tasks
+    }));
+    if (!runId) throw Error("The database returned no production run ID.");
     await loadRuns();
     await refreshTasks();
     text("run-status", "Production brief saved and " + stages.length +
