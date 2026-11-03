@@ -575,10 +575,12 @@ async function loadHandoffs(serial = state.projectLoadSerial) {
 // authenticated Supabase session; no private data enters GitHub.
 const studioWorkspace = createStudioWorkspace({
   db,
+  bucket: STORAGE_BUCKET,
   getContext: () => state,
   message,
   refreshProjects: (id) => loadProjects(id),
-  refreshTasks: () => loadTasks()
+  refreshTasks: () => loadTasks(),
+  refreshAssets: () => loadAssets()
 });
 
 $("auth-form").addEventListener("submit", handle(signIn));
