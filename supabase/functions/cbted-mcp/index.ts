@@ -29,6 +29,7 @@ const tools = [
   tool("cbted_record_output","After an actual ChatGPT creative tool result, record ONE output. Text requires its actual content; image/video/audio requires a real persisted project asset ID. A temporary ChatGPT sandbox reference is not proof of durable storage. Verification is pending unless evidence is explicitly supplied.",{project_id:U,task_id:U,output_kind:{type:"string",enum:["text","image","video","audio","prompt","document","other"]},sequence_index:{type:"integer",minimum:1},content:S,asset_id:U,source_version_id:U,verification_status:{type:"string",enum:["pending","passed","needs_repair","failed"]},verification_note:S},["project_id","task_id","output_kind"],false),
   tool("cbted_set_task_state","Update the current step/status of a task. Completion requires every requested output to have passed verification and to exist as records. Do not use this to pretend generation occurred.",{project_id:U,task_id:U,status:{type:"string",enum:["pending","in_progress","blocked","completed","failed","cancelled"]},current_step:S},["project_id","task_id","status"],false),
   tool("cbted_get_asset_link","For an asset owned by the connected user, create a short-lived signed URL to access its PRIVATE Supabase Storage file. ChatGPT must still inspect the actual source image rather than trusting its metadata.",{project_id:U,asset_id:U},["project_id","asset_id"],true),
+  tool("cbted_route_task","CBTeD ChatGPT-native coordinator: classify a targeted creative request into independent specialist stages. Does NOT create a run, invoke generation, require the website or demand unrelated studios. For a verse edit, select editorial; for video from existing song and image, select video_from_assets.",{intent:{type:"string",enum:["critique","editorial","new_song","verse","images","audio","video_from_assets","complete"]},has_existing_source:{type:"boolean"},has_image:{type:"boolean"},has_audio:{type:"boolean"},image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["intent"],true),
   tool("cbted_plan_production","Plan a CBTeD workflow without generating content. intent=plan is read-only; intent=execute persists a new run but does not start any agents.",{project_id:U,workflow:{type:"string",enum:["writing","visual","animation","song_video","plan_only"]},intent:{type:"string",enum:["plan","execute"]},instructions:S,source_version_id:U,image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["workflow","intent"],false),
   tool("cbted_get_production_status","Read an owned production run, every atomic step and its explicit approval decisions.",{run_id:U},["run_id"],true),
   tool("cbted_approve_production_step","Record a user-approved or revoked authorisation for one specific gated step. NEVER infer approval from a prior instruction or call this without the user's explicit decision.",{run_id:U,step_key:S,decision:{type:"string",enum:["approved","rejected","revoked"]},note:S},["run_id","step_key","decision"],false),
@@ -84,6 +85,31 @@ async function rest(token,table,query={},method="GET",body=null){
 }
 const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
+ if(name==="cbted_route_task"){
+   const routes={
+    critique:["writing_critic","language_auditor"],
+    editorial:["writing_critic","writing_editor","language_auditor","writing_proofreader","writing_reviewer"],
+    new_song:["writing_author","writing_critic","writing_editor","language_auditor","writing_synthesizer","writing_proofreader","writing_reviewer"],
+    verse:["writing_author","writing_critic","language_auditor","writing_proofreader"],
+    images:["visual_analyst","visual_tool_selector","visual_prompt_writer","image_generator","image_reviewer"],
+    audio:["audio_director","audio_tool_selector","audio_generator","audio_reviewer"],
+    video_from_assets:["storyboarding_director","motion_prompt_writer","video_tool_selector","video_generator","video_reviewer"]
+   };
+   const mode=a.intent;
+   if(!routes[mode]&&mode!=="complete")throw Error("Unknown creative task");
+   if(["editorial","critique","video_from_assets"].includes(mode)&&!a.has_existing_source)throw Error("An existing source is required");
+   if(mode==="video_from_assets"&&!a.has_image)throw Error("Existing image required for image-to-video");
+   const countImage=a.image_count??1,countVideo=a.video_count??1;
+   if(!Number.isInteger(countImage)||countImage<1||countImage>20||!Number.isInteger(countVideo)||countVideo<1||countVideo>20)throw Error("Invalid output count");
+   const selected=mode==="complete"?["new_song","images","audio","video_from_assets"]:[mode];
+   const stages=[];
+   for(const group of selected)for(const agent of routes[group]){
+     const studio=["critique","editorial","new_song","verse"].includes(group)?"writing":group==="images"?"visual":group==="audio"?"audio":"animation";
+     const count=["image_generator","image_reviewer","visual_prompt_writer"].includes(agent)?countImage:["video_generator","video_reviewer"].includes(agent)?countVideo:1;
+     for(let index=1;index<=count;index++)stages.push({studio,agent,output:index});
+   }
+   return {intent:mode,studios:[...new Set(stages.map(s=>s.studio))],stages,existing_source_preserved:!!a.has_existing_source,existing_image_preserved:!!a.has_image,existing_audio_preserved:!!a.has_audio,generation_started:false,requires_website:false,note:"Follow authoritative studio rules and perform actual creative work inside ChatGPT. This is a routing plan, not an output."};
+ }
  if(name.startsWith("cbted_")&&["cbted_plan_production","cbted_get_production_status","cbted_approve_production_step","cbted_execute_next","cbted_claim_production_step","cbted_finish_production_step","cbted_retry_production_step"].includes(name)){
    const endpoints={
      cbted_plan_production:"plan",cbted_get_production_status:"status",
