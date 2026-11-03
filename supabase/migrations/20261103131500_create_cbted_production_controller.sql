@@ -138,8 +138,8 @@ BEGIN
    THEN RAISE EXCEPTION 'Locked rules changed; replan before executing';END IF;
  SELECT * INTO v_s FROM public.production_steps WHERE run_id=p_run AND step_key=p_step FOR UPDATE;
  IF v_s.id IS NULL OR v_s.status <> 'pending' OR v_s.attempt_number >=5 THEN RAISE EXCEPTION 'Step is not pending';END IF;
- SELECT count(*) INTO v_remaining FROM unnest(v_s.depends_on) d
- LEFT JOIN public.production_steps done ON done.run_id=p_run AND done.step_key=d AND done.status='passed'
+ SELECT count(*) INTO v_remaining FROM unnest(v_s.depends_on) AS d(key)
+ LEFT JOIN public.production_steps done ON done.run_id=p_run AND done.step_key=d.key AND done.status='passed'
  WHERE done.id IS NULL;
  IF v_remaining>0 THEN RAISE EXCEPTION 'Previous required stage has not passed';END IF;
  IF v_s.approval_required THEN
