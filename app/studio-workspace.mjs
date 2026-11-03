@@ -6,7 +6,8 @@ const $ = (name) => document.getElementById(name);
 const studios = ["project", "writing", "visual", "animation", "run"];
 const assetSelectors = [
   "visual-character-asset", "visual-style-asset",
-  "visual-location-asset", "visual-object-asset", "animation-start-asset"
+  "visual-location-asset", "visual-object-asset", "visual-clothing-asset",
+  "visual-composition-asset", "animation-start-asset"
 ];
 const writingSelectors = ["visual-source-ref", "animation-source-ref"];
 const fields = {
@@ -15,7 +16,8 @@ const fields = {
     "visual-count", "visual-ratio", "visual-world", "visual-characters",
     "visual-camera", "visual-continuity", "visual-restrictions",
     "visual-character-asset", "visual-style-asset", "visual-location-asset",
-    "visual-object-asset", "visual-thumbnail-title"
+    "visual-object-asset", "visual-clothing-asset", "visual-composition-asset",
+    "visual-thumbnail-policy", "visual-thumbnail-title"
   ],
   animation: [
     "animation-source-ref", "animation-start-asset", "animation-goal",
@@ -26,7 +28,8 @@ const fields = {
 };
 const defaults = {
   visual: {
-    "visual-purpose": "song", "visual-count": "1", "visual-ratio": "16:9"
+    "visual-purpose": "song", "visual-count": "1", "visual-ratio": "16:9",
+    "visual-thumbnail-policy": "none"
   },
   animation: {
     "animation-count": "1", "animation-seconds": "10",
@@ -34,7 +37,7 @@ const defaults = {
   }
 };
 
-export function createStudioWorkspace({ db, getContext, message, refreshProjects, refreshTasks }) {
+export function createStudioWorkspace({ db, bucket, getContext, message, refreshProjects, refreshTasks, refreshAssets }) {
   const state = {
     projectId: null,
     settings: { visual: null, animation: null },
@@ -167,6 +170,52 @@ export function createStudioWorkspace({ db, getContext, message, refreshProjects
     }
   }
 
+  async function uploadStudioImages(studio) {
+    const project = assertProject();
+    const user = getContext().user;
+    if (!user) throw Error("Sign in before uploading reference images.");
+    const pickerId = studio === "visual" ? "visual-upload-file" : "animation-upload-file";
+    const statusId = studio + "-upload-status";
+    const items = [...($(pickerId).files || [])];
+    if (!items.length) throw Error("Choose an image to upload first.");
+    if (items.length > 10) throw Error("Upload at most ten images in one selection.");
+    let latestUploadedId = null;
+    let completed = 0;
+    const category = studio === "visual" ? "references" : "images";
+    for (const file of items) {
+      if (!(file.type || "").startsWith("image/")) {
+        throw Error("Only image files can be uploaded from this studio page.");
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        throw Error("Use images smaller than 20 MB each for this upload form.");
+      }
+      const name = (file.name || "reference-image").replace(/[^A-Za-z0-9._-]/g,"_").slice(-90);
+      const path = user.id + "/" + project.id + "/" + category +
+        "/" + crypto.randomUUID() + "-" + name;
+      text(statusId, "Uploading " + (completed + 1) + " of " + items.length + " images…");
+      const { error: uploadError } = await db.storage.from(bucket).upload(path, file, {
+        contentType: file.type, upsert: false
+      });
+      if (uploadError) throw uploadError;
+      const row = await runQuery(db.from("assets").insert({
+        project_id: project.id, asset_role: category, filename: file.name,
+        storage_path: path, mime_type: file.type, metadata: { byte_size: file.size }
+      }).select("id").single());
+      latestUploadedId = row.id;
+      completed += 1;
+    }
+    $(pickerId).value = "";
+    await refreshAssets();
+    populateAssetOptions();
+    if (studio === "animation" && latestUploadedId) {
+      $("animation-start-asset").value = latestUploadedId;
+      text(statusId, "Start image uploaded. Press Save Animation Setup at the bottom.");
+    } else {
+      text(statusId, completed + " reference image(s) uploaded. Assign their roles below, then save.");
+    }
+    message(completed + " private image(s) uploaded to " + project.title + ".");
+  }
+
   async function loadSettings(studio) {
     const projectId = assertProject().id;
     const rows = await runQuery(db.from("studio_settings")
@@ -192,6 +241,9 @@ export function createStudioWorkspace({ db, getContext, message, refreshProjects
     const count = Number(snapshot[studio + "-count"]);
     if (!Number.isInteger(count) || count < 1 || count > 50) {
       throw Error("Choose between 1 and 50 separate outputs.");
+    }
+    if (studio === "visual" && snapshot["visual-thumbnail-policy"] === "additional" && count === 50) {
+      throw Error("A separate extra thumbnail makes 51 images. Use 49 or fewer plus the thumbnail.");
     }
     if (studio === "animation" && (!Number.isInteger(Number(snapshot["animation-seconds"])) ||
        Number(snapshot["animation-seconds"]) < 1 || Number(snapshot["animation-seconds"]) > 300)) {
@@ -278,6 +330,11 @@ export function createStudioWorkspace({ db, getContext, message, refreshProjects
     if (stages.includes("animation") && state.settings.animation &&
       !state.settings.animation.settings["animation-start-asset"]) {
       errors.push("Animation: choose an uploaded start image and save the Animation setup.");
+    }
+    if (stages.includes("visual") && state.settings.visual &&
+      state.settings.visual.settings["visual-thumbnail-policy"] === "additional" &&
+      Number(state.settings.visual.settings["visual-count"]) > 49) {
+      errors.push("Visual: a separate extra thumbnail would exceed the maximum of 50 outputs.");
     }
     return errors;
   }
@@ -383,7 +440,9 @@ export function createStudioWorkspace({ db, getContext, message, refreshProjects
     const tasks = [];
     for (const studio of stages) {
       const configuration = state.settings[studio]?.settings || {};
-      const units = studio === "writing" ? 1 : Number(configuration[studio + "-count"]) || 1;
+      const units = studio === "writing" ? 1 :
+        (Number(configuration[studio + "-count"]) || 1) +
+        (studio === "visual" && configuration["visual-thumbnail-policy"] === "additional" ? 1 : 0);
       tasks.push({
         studio,
         operation: studio === "writing" ? "Writing Studio from saved source" :
@@ -468,6 +527,8 @@ export function createStudioWorkspace({ db, getContext, message, refreshProjects
   }
 
   $("studio-selector").addEventListener("change", (event) => openStudio(event.target.value));
+  $("visual-upload-button").addEventListener("click", safeAction(() => uploadStudioImages("visual")));
+  $("animation-upload-button").addEventListener("click", safeAction(() => uploadStudioImages("animation")));
   $("project-settings-form").addEventListener("submit", safeAction(saveProjectDetails));
   $("visual-form").addEventListener("submit", safeAction(() => saveSettings("visual")));
   $("animation-form").addEventListener("submit", safeAction(() => saveSettings("animation")));
