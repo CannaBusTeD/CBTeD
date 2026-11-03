@@ -30,6 +30,7 @@ jobs:
           node --check app/config.js
           node --check app/auth-notices.mjs
           node --check app/writing-fields.mjs
+          node --check app/studio-workspace.mjs
           node tests/check-project-manager.mjs
           node tests/check-auth-notices.mjs
           node tests/check-writing-fields.mjs
