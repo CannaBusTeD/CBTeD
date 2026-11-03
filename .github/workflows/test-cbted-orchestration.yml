@@ -23,6 +23,7 @@ jobs:
       - name: Verify deterministic gates and existing MCP auth
         run: |
           node --test tests/check-production.mjs
+          node --test tests/check-task-router.mjs
           node tests/check-cbted-mcp.mjs
       - name: Verify live orchestrator and refusal of unauthorised requests
         run: node tests/check-orchestrator-live.mjs
