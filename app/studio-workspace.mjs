@@ -239,6 +239,32 @@ export function createStudioWorkspace({ db, getContext, message, refreshProjects
     const stages = selectedStages();
     const context = getContext();
     const errors = [];
+    // Never let GO silently execute an older saved setup while newer edits
+    // remain visible but unsaved in another studio page.
+    if (context.project && (
+      $("project-display-title").value.trim() !== context.project.title ||
+      $("project-description").value !== (context.project.description || "")
+    )) {
+      errors.push("Project details have unsaved changes. Save Project Details first.");
+    }
+    if (stages.includes("writing") && context.version && (
+      $("source-title").value.trim() !== (context.source?.title || "") ||
+      $("source-type").value !== (context.source?.source_kind || "other") ||
+      $("source-text").value !== (context.version.content || "") ||
+      $("writing-ideas").value !== (context.version.ideas || "") ||
+      $("writing-suggestions").value !== (context.version.suggested_text || "")
+    )) {
+      errors.push("Writing contains unsaved edits. Press Save Writing Draft first.");
+    }
+    for (const studio of ["visual","animation"]) {
+      if (!stages.includes(studio) || !state.settings[studio]) continue;
+      const saved = state.settings[studio].settings;
+      if (fields[studio].some((key) => currentInputs(studio)[key] !== (saved[key] ?? defaults[studio][key] ?? ""))) {
+        errors.push((studio === "visual" ? "Visual" : "Animation") +
+          " contains unsaved changes. Press Save " +
+          (studio === "visual" ? "Visual Setup" : "Animation Setup") + " first.");
+      }
+    }
     if (!stages.length) errors.push("Choose at least one studio.");
     if (stages.includes("writing") && !context.version) {
       errors.push("Writing: save a writing draft first.");
