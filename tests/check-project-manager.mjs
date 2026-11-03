@@ -19,7 +19,9 @@ const studioJs = readFileSync("app/studio-workspace.mjs", "utf8");
 assert.match(studioJs, /createStudioWorkspace/);
 assert.match(studioJs, /from\("studio_settings"\)/);
 assert.match(studioJs, /from\("project_runs"\)/);
-assert.match(studioJs, /run_id: run\.id/);
+assert.match(studioJs, /db\.rpc\("prepare_project_run"/);
+assert.match(studioJs, /p_task_specs: tasks/);
+assert.match(studioJs, /"blocked"/);
 assert.match(studioJs, /media_generation_connected: false/);
 assert.match(studioJs, /downloadBrief/);
 
