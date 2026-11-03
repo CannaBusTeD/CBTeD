@@ -175,6 +175,20 @@ When the author expressly requests writing:
 
 If creative decisions are delegated, make grounded choices within the brief rather than repeatedly asking for optional preferences.
 
+## 12A. Mandatory new-song editorial pass after first draft
+
+For every newly written original song, immediately preserve an unapproved full draft and then perform the full **`writing/Lyric_Post_Draft_Editorial_Gate.md`** procedure. A plausible first draft is not final output.
+
+When a thumbnail is requested, check the concept and dispatch exactly one image-generation operation using the Visual Studio source, rules and references as soon as the narrative concept is stable; then continue the writing work while that real image job renders. The three post-draft editorial stages are mandatory, independent operations and must occur in order:
+
+1. **BRUTAL CRITIQUE:** reread the entire first draft and identify precise synthetic/AI phrasing, stock metaphors, repetitive sentence patterns, list structures, forced rhymes, stale diction, weak hooks, singability faults and rule violations, with line-specific evidence; protect distinctive successful lines.
+2. **EDITORIAL RECOMMENDATIONS:** isolate the most consequential repair and propose exact targeted interventions, explaining why they strengthen the song and preserving the original source, artist voice, continuity and all approved text.
+3. **REWRITE:** return to the original full draft and apply justified changes to the assistant's unapproved draft; create a new complete version, check it against the plan and repair any introduced AI-sounding patterns.
+
+After all three, reread, proofread and check the complete revised lyric by ear for cadence, breath, meaning, repetition, structure and user-specific negative constraints. Return to the failed stage if material faults remain. The final deliverable is the revised lyric, not the first draft. Independently inspect the thumbnail after generation and compare its story concept with the revised song; preserve it if still accurate or repair only if materially inconsistent. Mark image-generation status accurately.
+
+This automatic full-draft revision gate applies to assistant-authored *new songs* only. For an existing user-supplied, approved or published lyric, or a critique/formatting-only request, the task's explicitly authorised editing scope prevails. Critique and suggestions never automatically authorise overwriting an approved original. All steps still follow the full universal master loop and the studio's versioning and approval rules.
+
 ## 13. Controlled revision workflow
 
 When revising an existing draft:
