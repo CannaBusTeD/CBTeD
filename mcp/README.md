@@ -9,7 +9,7 @@ The existing web project manager is optional supporting infrastructure. The OAut
 ## Deployed backend
 
 - Supabase project: dmzzyfiwtosxtyekpbfi
-- Edge Function: cbted-mcp, version 3 reported ACTIVE.
+- Edge Function: cbted-mcp, version 4 reported ACTIVE.
 - MCP URL: https://dmzzyfiwtosxtyekpbfi.supabase.co/functions/v1/cbted-mcp
 - Protected resource metadata: https://dmzzyfiwtosxtyekpbfi.supabase.co/functions/v1/cbted-mcp/.well-known/oauth-protected-resource
 - OAuth issuer: https://dmzzyfiwtosxtyekpbfi.supabase.co/auth/v1
@@ -23,26 +23,21 @@ The server embeds thirteen full rule documents from the GitHub repository, toget
 
 Public read: cbted_get_rulebook.
 
-Authenticated private operations: cbted_list_projects, cbted_get_project_context, cbted_get_source_version, cbted_create_project, cbted_create_source, cbted_save_writing_version, cbted_approve_source_version, cbted_add_project_rule, cbted_create_task, cbted_record_output, cbted_set_task_state and cbted_get_asset_link.
+Authenticated private operations: cbted_list_projects, cbted_get_project_context, cbted_get_source_version, cbted_create_project, cbted_create_source, cbted_save_writing_version, cbted_approve_source_version, cbted_add_project_rule, cbted_create_task, cbted_record_output, cbted_set_task_state and cbted_get_asset_link. Seven additional production tools were added to the live bridge: cbted_plan_production, cbted_get_production_status, cbted_approve_production_step, cbted_execute_next, cbted_claim_production_step, cbted_finish_production_step and cbted_retry_production_step. The installed plugin's cached tool schema may still list only the original tools until refreshed.
 
-The server does not invoke external generation providers. ChatGPT must use its own available tools to create any writing, image or video. A saved task or prompt does not mean generation has happened. Media output records require an actual persistent project asset ID; a temporary ChatGPT sandbox path is not durable Supabase storage.
+The MCP bridge itself does not generate media. It now proxies permitted execution into the separate authenticated Supabase `cbted-orchestrator` service, which includes guarded OpenAI text and image adapters. Paid execution is disabled by default; video/audio providers are not connected. ChatGPT may still use native tools, but the bridge cannot intercept or technically forbid those independent host calls. A saved task or prompt does not mean generation has happened. Media output records require a real private stored project asset, not a temporary ChatGPT sandbox path.
 
-## Secure connection tasks still required
+## Authenticated connection verified; production follow-up required
 
-1. In Supabase's CBTeD project dashboard, enable Authentication > OAuth Server. This admin-level switch is not accessible through the connected Supabase management tools.
-2. Configure the authorization path to resolve to the consent page hosted at the GitHub Pages URL above. Check carefully how Supabase combines Site URL and Authorization Path, especially the /CBTeD/ path prefix.
-3. Check the OAuth signing algorithm and supported scopes. Supabase documents that OpenID Connect ID tokens require asymmetric JWT signing keys; do not assume that is already configured.
-4. Configure a compatible ChatGPT OAuth client registration mode (CIMD, dynamic registration or pre-registration), plus the exact ChatGPT redirect URI shown during setup. Do not guess redirect IDs.
-5. In ChatGPT web, open Plugins, press plus, select Add custom MCP server (subject to account/workspace permissions), and enter the MCP URL. Select OAuth, approve the connection and install CBTeD.
-6. Test cbted_get_rulebook, then authenticated cbted_list_projects. Test one private write in a disposable project and check it in Supabase before trusting production operations.
+- The connected CBTeD plugin successfully returned the complete source rulebook and **real owner-scoped project records** through `cbted_list_projects` on 3 November 2026. No need to repeat the original OAuth installation procedure.
+- Supabase reports `cbted-mcp` ACTIVE version 4 and `cbted-orchestrator` ACTIVE; after later code changes the orchestrator must be redeployed and source hash/version checked.
+- The plugin's currently advertised tool list may remain at thirteen functions until the connection/tool manifest is refreshed. The backend now advertises seven additional production operations.
+- The database has been migrated, and rollback-only stage/approval/media/failed-step tests were executed without a reported SQL error. GitHub Actions has returned a successful deterministic controller/MCP test run; this is not a full browser-to-provider live test.
+- Full user-driven sign-in, `plan`, `execute`, `status`, per-stage approval, real asset inspection and paid provider interaction still require end-to-end validation. Test with a disposable project before using important source material.
+- The linked GitHub repository is the code source of truth. `SUPABASE_ACCESS_TOKEN` must be securely configured before automatic GitHub-to-Supabase deployments can be trusted.
+- See `docs/ORCHESTRATION.md` for exact state transitions, the API contract and blocked features.
 
-## Verification status
-
-Supabase confirms the deployed function is ACTIVE. The source and matching GitHub file were retrieved. Live unauthenticated HTTP smoke tests could not be run from the current execution environment because public outbound requests to the Supabase project were unavailable. The scripted MCP tests are committed to GitHub Actions, but their CI result has not been independently confirmed.
-
-The full ChatGPT OAuth redirect, token audience and refresh-token behaviour remain unverified. The actual plugin is **not yet installed or connected in ChatGPT**.
-
-Security model: public rules may be fetched without authorization; project operations validate a Supabase user bearer and use owner-only row-level security. The function uses a publishable key, never the service-role key. Private asset links expire after 120 seconds. The consent page requires explicit approval and accepts only ChatGPT callback destinations.
+Security model: public rules may be fetched without authorization; project operations validate a Supabase user bearer and use owner-only database rules. No service-role credentials are exposed to clients. Private asset links expire. Continue to verify the token audience and refresh flow in an independent end-to-end test.
 
 ## Mandatory post-draft lyric gate
 

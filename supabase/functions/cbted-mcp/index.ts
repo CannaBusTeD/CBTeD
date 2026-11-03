@@ -28,7 +28,15 @@ const tools = [
   tool("cbted_create_task","Register ONE creative operation with count and requirements. This does not generate content or mark outputs complete; ChatGPT must separately invoke a real native creative tool.",{project_id:U,studio:{type:"string",enum:["writing","visual","animation"]},operation:S,requested_units:{type:"integer",minimum:1,maximum:50},source_version_id:U,start_asset_id:U,requirements:{type:"object"},current_step:S},["project_id","studio","operation","requested_units"],false),
   tool("cbted_record_output","After an actual ChatGPT creative tool result, record ONE output. Text requires its actual content; image/video/audio requires a real persisted project asset ID. A temporary ChatGPT sandbox reference is not proof of durable storage. Verification is pending unless evidence is explicitly supplied.",{project_id:U,task_id:U,output_kind:{type:"string",enum:["text","image","video","audio","prompt","document","other"]},sequence_index:{type:"integer",minimum:1},content:S,asset_id:U,source_version_id:U,verification_status:{type:"string",enum:["pending","passed","needs_repair","failed"]},verification_note:S},["project_id","task_id","output_kind"],false),
   tool("cbted_set_task_state","Update the current step/status of a task. Completion requires every requested output to have passed verification and to exist as records. Do not use this to pretend generation occurred.",{project_id:U,task_id:U,status:{type:"string",enum:["pending","in_progress","blocked","completed","failed","cancelled"]},current_step:S},["project_id","task_id","status"],false),
-  tool("cbted_get_asset_link","For an asset owned by the connected user, create a short-lived signed URL to access its PRIVATE Supabase Storage file. ChatGPT must still inspect the actual source image rather than trusting its metadata.",{project_id:U,asset_id:U},["project_id","asset_id"],true)
+  tool("cbted_get_asset_link","For an asset owned by the connected user, create a short-lived signed URL to access its PRIVATE Supabase Storage file. ChatGPT must still inspect the actual source image rather than trusting its metadata.",{project_id:U,asset_id:U},["project_id","asset_id"],true),
+  tool("cbted_plan_production","Plan a CBTeD workflow without generating content. intent=plan is read-only; intent=execute persists a new run but does not start any agents.",{project_id:U,workflow:{type:"string",enum:["writing","visual","animation","song_video","plan_only"]},intent:{type:"string",enum:["plan","execute"]},instructions:S,source_version_id:U,image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["workflow","intent"],false),
+  tool("cbted_get_production_status","Read an owned production run, every atomic step and its explicit approval decisions.",{run_id:U},["run_id"],true),
+  tool("cbted_approve_production_step","Record a user-approved or revoked authorisation for one specific gated step. NEVER infer approval from a prior instruction or call this without the user's explicit decision.",{run_id:U,step_key:S,decision:{type:"string",enum:["approved","rejected","revoked"]},note:S},["run_id","step_key","decision"],false),
+  tool("cbted_execute_next","Execute only the next authorised single production operation through the controlled backend. Paid provider generation is disabled unless backend credentials and opt-in are configured.",{run_id:U},["run_id"],false),
+  tool("cbted_claim_production_step","Atomically claim one authorised stage before invoking a ChatGPT native tool. It rejects premature execution, missing approvals, and changed locked rules.",{run_id:U,step_key:S},["run_id","step_key"],false),
+  tool("cbted_finish_production_step","Record actual output after a previously authorised tool operation. Media requires a project-owned verified private asset, not a prompt or temporary link.",{run_id:U,step_key:S,result:{type:"string",enum:["passed","failed"]},text:S,asset_id:U,evidence:{type:"object"}},["run_id","step_key","result"],false),
+  tool("cbted_retry_production_step","Retry exactly one failed stage, preserving all previously passed stages and stopping after the permitted attempt count.",{run_id:U,step_key:S},["run_id","step_key"],false)
+
 ];
 const isUUID = (v) => typeof v==="string" && uuidRe.test(v);
 const requireUUID=(v,k)=>{if(!isUUID(v))throw Error("Invalid "+k);return v;};
@@ -76,6 +84,24 @@ async function rest(token,table,query={},method="GET",body=null){
 }
 const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
+ if(name.startsWith("cbted_")&&["cbted_plan_production","cbted_get_production_status","cbted_approve_production_step","cbted_execute_next","cbted_claim_production_step","cbted_finish_production_step","cbted_retry_production_step"].includes(name)){
+   const endpoints={
+     cbted_plan_production:"plan",cbted_get_production_status:"status",
+     cbted_approve_production_step:"approve",cbted_execute_next:"execute-next",
+     cbted_claim_production_step:"claim",cbted_finish_production_step:"finish",
+     cbted_retry_production_step:"retry"
+   };
+   const endpoint=SUPABASE_URL+"/functions/v1/cbted-orchestrator/"+endpoints[name];
+   const body=name==="cbted_get_production_status"||name==="cbted_execute_next"?{run_id:a.run_id}:
+     name==="cbted_approve_production_step"?{run_id:a.run_id,step_key:a.step_key,decision:a.decision,note:a.note}:
+     name==="cbted_claim_production_step"?{run_id:a.run_id,step_key:a.step_key}:
+     name==="cbted_finish_production_step"?{run_id:a.run_id,step_key:a.step_key,result:a.result,text:a.text,asset_id:a.asset_id,evidence:a.evidence}:
+     name==="cbted_retry_production_step"?{run_id:a.run_id,step_key:a.step_key}:a;
+   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":publishableKey(),"Authorization":"Bearer "+token},body:JSON.stringify(body)});
+   let value;try{value=await response.json();}catch{throw Error("Orchestrator returned invalid JSON");}
+   if(!response.ok)throw Error("Orchestrator blocked: "+String(value.error||"Access denied").slice(0,250));
+   return value;
+ }
  if(name==="cbted_get_rulebook"){
    const studio=a.studio||"core";
    if(!["core","writing","visual","animation"].includes(studio))throw Error("Unknown studio");

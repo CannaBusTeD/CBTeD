@@ -1,0 +1,26 @@
+name: Test CBTeD Orchestration
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: ["feature/**"]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax of orchestration modules and backend entrypoints
+        run: |
+          node --check app/production.js
+          node --check supabase/functions/_shared/production.mjs
+          node --check --input-type=module < supabase/functions/cbted-orchestrator/index.ts
+          node --check --input-type=module < supabase/functions/cbted-mcp/index.ts
+      - name: Verify deterministic gates and existing MCP auth
+        run: |
+          node --test tests/check-production.mjs
+          node tests/check-cbted-mcp.mjs

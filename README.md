@@ -1,6 +1,6 @@
 # CBTeD
 
-CBTeD is a source-first creative production system, with three independent but interconnected specialist studios: **Writing**, **Visual**, and **Animation**.
+CBTeD is a source-first creative production system, with Writing, Visual, Audio and Animation specialist agent groups managed by one controlled production coordinator. The original Writing, Visual and Animation studio instructions remain authoritative.
 
 ## Current implementation status
 
@@ -21,13 +21,15 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 - `cbted-public-config` Edge Function deployed; it serves **only public browser configuration**, never database secrets.
 - `core/Shared_Project_Database.md` documents the deployed schema and storage policies.
 
-### ChatGPT-native CBTeD MCP bridge (deployed, not yet linked)
+### Connected CBTeD MCP and central production orchestrator
 
-- Supabase Edge Function cbted-mcp is deployed and ACTIVE. Its 13 MCP tools return complete master/studio instructions and manage owner-scoped project records.
-- The server bundles 13 original GitHub rule documents, including the mandatory post-draft lyric editorial gate, with source SHA identifiers.
-- OAuth metadata and a one-time consent page have been implemented, but Supabase OAuth Server activation, ChatGPT registration and authenticated end-to-end tests are outstanding.
-- Creative generation is performed by ChatGPT using its own available tools, not by the MCP server or a separate website.
-- See [MCP integration instructions](mcp/README.md).
+- The existing `cbted-mcp` Supabase Edge Function was deployed as version 4, with seven added production-management tools alongside its original thirteen. The connected CBTeD plugin successfully returned the full master rulebook **and actual authenticated project records**; plugin tool manifests may need refreshing to reveal the new functions.
+- The new `cbted-orchestrator` Edge Function is deployed. It offers deterministic, project-owned planning and separate authorised stage execution.
+- PostgreSQL tables `production_runs`, `production_steps` and `production_approvals` persist the production plan, specialist work and explicit approvals. Additive migrations have been applied, including a check for **real private Storage objects**, not merely asset metadata, before media stages can pass.
+- The controller defines **23 specialist agent roles** for writing, language-pattern review, image design, audio and video. Only controlled backend text/image adapters are currently implemented; no working audio/video provider or final editor has been verified.
+- Planning never authorises generation. Paid backend execution is disabled unless API credentials, model choices, an explicit enable flag and a per-run operation cap are all configured.
+- GitHub contains the canonical source and CI workflows. GitHub-to-Supabase automatic deployment additionally needs `SUPABASE_ACCESS_TOKEN` configured in GitHub Actions.
+- See [orchestration architecture and verification](docs/ORCHESTRATION.md) and [MCP integration](mcp/README.md).
 
 ### New song editorial quality gate
 
@@ -42,14 +44,14 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 - Supports Supabase email/password signup and sign-in, project creation, versioned writing, explicit approvals, project-specific rules, private file uploads/downloads, task records, and a Writing-to-Visual handoff record.
 - A single accessible drop-down now switches among five pages: Project Setup, Writing, Visual, Animation and GO.
 - Each page has a clearly labelled Save control at its bottom. Visual and Animation settings are stored as separate append-only versions in Supabase; existing writing versions are preserved.
-- GO validates saved settings, prepares a real immutable production brief, and atomically records blocked work tasks via `prepare_project_run`. It can export the brief as JSON. Actual generation providers are **not yet connected** and are not falsely represented as having run.
+- GO validates saved settings and records a preproduction brief via `prepare_project_run`. Separately, `app/production.html` and `app/production.js` add a production controller to preview ordered agent stages, register runs, inspect status, approve or revoke media operations and execute one permitted stage. Neither GO nor production registration is evidence of generated media.
 - The approved CBTeD emblem and ruby/gunmetal/velvet visual identity are integrated throughout.
 - `.github/workflows/deploy-cbted-manager.yml` is a GitHub Pages deployment workflow with static checks.
 - `app/README.md` explains setup, security, known limitations and the first authenticated user test.
 
-**Important:** the user has confirmed that the GitHub Pages website is live and that account sign-in and project creation work. The new five-page interface and production-run UI have been committed and the database operation passed a rollback-only authenticated test, but the latest Pages deployment and a full user-driven image/video-provider run are **not** independently verified. Auth redirect settings have been configured.
+**Important:** existing GitHub Pages sign-in and project creation were previously confirmed. The separate Production Controller page is on the feature branch until merged and published; do not claim that the new page has passed live browser acceptance tests. The connected MCP authenticated-project-list check succeeded, and the Supabase database changes were applied. No charged model output or complete music-video generation has been verified.
 
-A saved handoff or task is a record, **not** evidence that an image or video has been generated. The ChatGPT-native MCP backend is deployed but has not yet been linked inside ChatGPT; authenticated use and native creative execution remain to be verified.
+A saved handoff or task is a record, **not** evidence that an image or video has been generated. The ChatGPT-native MCP backend is connected and its authenticated read works, but the seven newly added actions may require a plugin refresh. Do not confuse deployed orchestration code with end-to-end generation verification.
 
 ## Development principles
 
@@ -62,4 +64,4 @@ A saved handoff or task is a record, **not** evidence that an image or video has
 
 ## Next action
 
-Enable Supabase OAuth 2.1, verify the consent URL and ChatGPT callback, then link and test the MCP server as a custom plugin. See [MCP integration instructions](mcp/README.md).
+After CI passes, merge the orchestration feature branch and verify the new GitHub Pages UI. Configure the GitHub Actions deployment credential, refresh the CBTeD plugin tool manifest if needed, then perform an authenticated disposable-project end-to-end test. Connect real paid model APIs only after explicit cost and provider review. Audio/video and final assembly remain future integrations.
