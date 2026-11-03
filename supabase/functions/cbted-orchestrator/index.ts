@@ -50,7 +50,7 @@ async function requireRun(token,runId){
 async function state(token,runId){
  const run=await requireRun(token,runId);
  const [steps,approvals]=await Promise.all([
-   rest(token,"production_steps",{run_id:"eq."+runId,order:"created_at.asc",limit:"200"}),
+   rest(token,"production_steps",{run_id:"eq."+runId,order:"sequence_index.asc",limit:"200"}),
    rest(token,"production_approvals",{run_id:"eq."+runId,order:"created_at.asc",limit:"200"})
  ]);
  return {run,steps,approvals};
