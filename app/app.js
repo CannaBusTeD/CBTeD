@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
 import { loadPublicConfig } from "./config.js";
 import { writingFieldCopy } from "./writing-fields.mjs";
+import { createStudioWorkspace } from "./studio-workspace.mjs";
 import { isTemporaryRegistrationLimit, isEmailConfirmationRequired, registrationNotice } from "./auth-notices.mjs";
 
 // Get only the project's browser-safe publishable configuration.
@@ -167,7 +168,7 @@ function drawProjects() {
 }
 async function loadProjects(preferredId = null) {
   const projects = await query(db.from("projects")
-    .select("id,title,status,current_studio,created_at,updated_at")
+    .select("id,title,description,status,current_studio,created_at,updated_at")
     .order("updated_at", { ascending: false }));
   state.projects = projects || [];
   const selectedId = preferredId || state.project?.id;
@@ -186,7 +187,7 @@ async function createProject() {
   message("Creating project…");
   const project = await query(db.from("projects")
     .insert({ title, owner_id: state.user.id })
-    .select("id,title,status,current_studio,created_at,updated_at").single());
+    .select("id,title,description,status,current_studio,created_at,updated_at").single());
   $("project-title").value = "";
   await loadProjects(project.id);
   message("Project created: " + project.title);
@@ -212,6 +213,8 @@ async function chooseProject(project) {
   await loadTasks(serial);
   if (serial !== state.projectLoadSerial) return;
   await loadHandoffs(serial);
+  if (serial !== state.projectLoadSerial) return;
+  await studioWorkspace.loadProject(project);
   if (serial === state.projectLoadSerial) message("Project ready: " + project.title);
 }
 function updateWritingLabels() {
@@ -375,6 +378,7 @@ async function saveSource() {
     change_note: nextNumber === 1 ? "Initial source" : "User saved a new version"
   }).select("id,version_number").single());
   await loadSources(state.projectLoadSerial, source.id, version.id);
+  await studioWorkspace.refreshSources();
   message("Saved " + source.title + ", Version " + version.version_number + ". Current writing, ideas and suggested changes are stored separately. The draft remains unapproved until you approve it.");
 }
 async function approveVersion() {
@@ -386,6 +390,7 @@ async function approveVersion() {
     decided_by: state.user.id, note: "Approved by project owner in CBTeD manager"
   }));
   await loadVersionApproval();
+  await studioWorkspace.refreshSources();
   message("Version " + state.version.version_number + " approved. Other versions remain unchanged.");
 }
 async function prepareHandoff() {
@@ -492,6 +497,7 @@ async function uploadAsset() {
   }
   $("project-file").value = "";
   await loadAssets();
+  studioWorkspace.refreshAssets();
   message("File uploaded and recorded privately: " + file.name);
 }
 async function downloadAsset(asset) {
@@ -564,6 +570,16 @@ async function loadHandoffs(serial = state.projectLoadSerial) {
     list.append(li);
   }
 }
+
+// Shared client-side studio controller. All reads and writes use the
+// authenticated Supabase session; no private data enters GitHub.
+const studioWorkspace = createStudioWorkspace({
+  db,
+  getContext: () => state,
+  message,
+  refreshProjects: (id) => loadProjects(id),
+  refreshTasks: () => loadTasks()
+});
 
 $("auth-form").addEventListener("submit", handle(signIn));
 $("sign-up").addEventListener("click", handle(signUp));
