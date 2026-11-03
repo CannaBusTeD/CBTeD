@@ -21,6 +21,14 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 - `cbted-public-config` Edge Function deployed; it serves **only public browser configuration**, never database secrets.
 - `core/Shared_Project_Database.md` documents the deployed schema and storage policies.
 
+### ChatGPT-native CBTeD MCP bridge (deployed, not yet linked)
+
+- Supabase Edge Function cbted-mcp is deployed and ACTIVE. Its 13 MCP tools return complete master/studio instructions and manage owner-scoped project records.
+- The server bundles 12 original GitHub rule documents, with source SHA identifiers.
+- OAuth metadata and a one-time consent page have been implemented, but Supabase OAuth Server activation, ChatGPT registration and authenticated end-to-end tests are outstanding.
+- Creative generation is performed by ChatGPT using its own available tools, not by the MCP server or a separate website.
+- See [MCP integration instructions](mcp/README.md).
+
 ### CBTeD Studios project manager (v2)
 
 - `app/index.html`, `app/styles.css`, `app/app.js` implement a keyboard/screen-reader-friendly project manager.
@@ -34,7 +42,7 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 
 **Important:** the user has confirmed that the GitHub Pages website is live and that account sign-in and project creation work. The new five-page interface and production-run UI have been committed and the database operation passed a rollback-only authenticated test, but the latest Pages deployment and a full user-driven image/video-provider run are **not** independently verified. Auth redirect settings have been configured.
 
-A saved handoff or task is a record, **not** evidence that an image or video has been generated. Actual creative tools, the public plugin interface, and a three-studio execution coordinator remain to be integrated.
+A saved handoff or task is a record, **not** evidence that an image or video has been generated. The ChatGPT-native MCP backend is deployed but has not yet been linked inside ChatGPT; authenticated use and native creative execution remain to be verified.
 
 ## Development principles
 
@@ -47,4 +55,4 @@ A saved handoff or task is a record, **not** evidence that an image or video has
 
 ## Next action
 
-Enable and verify GitHub Pages publication of the project manager, configure Supabase Auth redirect URLs, and perform the first real-user end-to-end sign-in and project/file tests. After that, connect the studio execution tools and shared-project coordinator.
+Enable Supabase OAuth 2.1, verify the consent URL and ChatGPT callback, then link and test the MCP server as a custom plugin. See [MCP integration instructions](mcp/README.md).
