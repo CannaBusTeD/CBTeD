@@ -1,0 +1,7 @@
+project_id = "dmzzyfiwtosxtyekpbfi"
+
+[functions.cbted-mcp]
+verify_jwt = false
+
+[functions.cbted-orchestrator]
+verify_jwt = false
