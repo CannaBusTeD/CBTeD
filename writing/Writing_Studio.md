@@ -48,6 +48,10 @@ State the active mode at the start of a **critique**, as required by the master 
 
 Do not impose editorial-mode labels on a non-critique request simply because they exist in the source.
 
+## Mandatory post-draft editorial gate for new songs
+
+When CBTeD **writes new lyrics**, a completed first draft is not the delivery version. Load and perform every stage of `writing/Lyric_Post_Draft_Editorial_Gate.md` in the documented order. For new song + thumbnail work, submit one thumbnail generation from the sufficiently established concept, then perform **three separate editorial operations** before final delivery: (1) brutal full-lyric AI-slop critique, (2) evidence-led editorial recommendations and repair plan, (3) substantive rewrite against those recommendations. Afterward reread, proofread and sing-through-check the revised full text, and verify that the thumbnail still represents the final song. The universal master and all current project rules remain authoritative. Do not apply automatic wholesale rewriting to someone else's already-approved text, a proofreading-only request, or an explicitly restricted edit.
+
 ## Critique and revision procedure
 For every applicable task:
 1. Follow the **entire** universal execution loop from the master workflow document.
