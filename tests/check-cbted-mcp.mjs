@@ -41,7 +41,7 @@ const rpc=async(method,params={},auth=false)=>{
 };
 const health=await (await handler(new Request(base))).json();
 assert.equal(health.status,"online");
-assert.equal(health.rule_documents,12);
+assert.equal(health.rule_documents,13);
 const meta=await(await handler(new Request(base+"/.well-known/oauth-protected-resource"))).json();
 assert.equal(meta.resource,base);
 assert.equal(meta.authorization_servers[0],"https://"+projectRef+".supabase.co/auth/v1");
@@ -61,6 +61,15 @@ const payload=JSON.parse(rules.result.content[0].text);
 assert.equal(payload.documents.length,5);
 assert.match(payload.documents[0].content,/HARD RULE 1/);
 assert.match(payload.documents[2].content,/Visual/);
+const writingRules=await rpc("tools/call",{name:"cbted_get_rulebook",arguments:{studio:"writing"}});
+assert.equal(writingRules.result.isError,false);
+const lyricPayload=JSON.parse(writingRules.result.content[0].text);
+assert.equal(lyricPayload.documents.length,7,"Writing instructions must include the dedicated lyric gate");
+const gate=lyricPayload.documents.find(d=>d.path==="writing/Lyric_Post_Draft_Editorial_Gate.md");
+assert.ok(gate,"Dedicated editorial gate must be present");
+for(const phase of ["BRUTAL CRITIQUE","RECOMMENDATIONS","REWRITE"]){assert.ok(gate.content.includes(phase),"Missing required editorial stage: "+phase);}
+assert.ok(gate.content.indexOf("BRUTAL CRITIQUE")<gate.content.indexOf("RECOMMENDATIONS"));
+assert.ok(gate.content.indexOf("RECOMMENDATIONS")<gate.content.indexOf("REWRITE"));
 assert.equal(networkCalls,0,"Reading public bundled rules must not access private APIs");
 const blocked=await rpc("tools/call",{name:"cbted_list_projects",arguments:{}});
 assert.equal(blocked.result.isError,true);
