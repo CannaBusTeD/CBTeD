@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="theme-color" content="#250c16">
+ <title>CBTeD | Production Controller</title>
+ <link rel="stylesheet" href="./styles.css">
+ <script type="module" src="./production.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to controller</a>
+<header class="site-header"><div class="container header-inner">
+ <a class="brand-lockup" href="./" aria-label="Back to CBTeD Studios">
+  <img class="brand-emblem" src="./assets/cbted-emblem.webp" alt="" width="96" height="96">
+  <span class="brand-text"><span class="eyebrow brand-name">CBTeD</span><span class="brand-studios">PRODUCTION</span><span class="brand-subtitle">Controlled multi-agent execution</span></span>
+ </a>
+</div></header>
+<main id="main" class="container">
+ <p><a href="./">Back to Studios and project files</a></p>
+ <h1>Production Controller</h1>
+ <p>Plan first, then explicitly register a run. Every specialist stage has dependencies, and image, audio and video generation require separate approval. Preparing a run does not generate anything.</p>
+ <p id="production-status" role="status" aria-live="polite">Checking your signed-in account…</p>
+ <section class="panel" aria-labelledby="planning-heading">
+  <h2 id="planning-heading">1. Prepare a production plan</h2>
+  <form id="production-form">
+   <div class="fields">
+    <label>Current project <select id="production-project" required><option value="">Select a project</option></select></label>
+    <label>Workflow
+      <select id="production-workflow" required>
+        <option value="writing">Writing only</option>
+        <option value="visual">Images only</option>
+        <option value="animation">Animation only</option>
+        <option value="song_video">Complete song and music video</option>
+      </select>
+    </label>
+    <label>Separate images <input id="production-images" type="number" min="1" max="20" value="1"></label>
+    <label>Separate video clips <input id="production-videos" type="number" min="1" max="20" value="1"></label>
+   </div>
+   <label>Task instructions <textarea id="production-instructions" rows="5" maxlength="20000" placeholder="Describe what CBTeD should create, what source to use and what must be preserved." required></textarea></label>
+   <div class="actions">
+    <button type="submit" id="preview-production">Preview all stages</button>
+    <button type="button" id="create-production" class="secondary" disabled>Register this production run</button>
+   </div>
+  </form>
+  <p class="hint">Planning alone never calls a generation provider. Registration creates immutable workflow stages but does not execute them.</p>
+  <section aria-labelledby="plan-heading">
+   <h3 id="plan-heading">Proposed sequence</h3>
+   <ol id="production-preview" aria-live="polite"></ol>
+  </section>
+ </section>
+ <section class="panel" aria-labelledby="runs-heading">
+  <h2 id="runs-heading">2. Track a production run</h2>
+  <label>Select a saved run <select id="production-runs"><option value="">No run selected</option></select></label>
+  <div class="actions"><button type="button" id="refresh-production" class="secondary">Refresh run</button></div>
+  <p id="run-state" role="status" aria-live="polite">Select a project and run.</p>
+  <ol id="production-steps"></ol>
+ </section>
+ <section class="panel" aria-labelledby="execution-heading">
+  <h2 id="execution-heading">3. Controlled execution</h2>
+  <p>Only the next eligible stage can run. Approvals do not bypass prerequisites. Paid generation is disabled in the backend until provider credentials, costs and per-run limits are explicitly configured.</p>
+  <div class="actions"><button type="button" id="run-next">Execute one authorised stage</button></div>
+  <p id="execution-result" role="status" aria-live="polite"></p>
+ </section>
+</main>
+<footer class="container footer">CBTeD. Original sources and approvals are never silently overwritten.</footer>
+</body>
+</html>
