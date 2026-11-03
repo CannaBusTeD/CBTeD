@@ -30,7 +30,7 @@ jobs:
         run: |
           node --check app/app.js
           node --check app/oauth/consent/consent.js
-          node --check supabase/functions/cbted-mcp/index.ts
+          node --check --input-type=module < supabase/functions/cbted-mcp/index.ts
           node tests/check-cbted-mcp.mjs
           node --check app/config.js
           node --check app/auth-notices.mjs
