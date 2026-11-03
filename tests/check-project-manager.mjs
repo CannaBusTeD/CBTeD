@@ -15,6 +15,14 @@ assert.match(html, /WRITING/);
 assert.match(html, /VISUAL/);
 assert.match(html, /ANIMATION/);
 const css = readFileSync("app/styles.css", "utf8");
+const studioJs = readFileSync("app/studio-workspace.mjs", "utf8");
+assert.match(studioJs, /createStudioWorkspace/);
+assert.match(studioJs, /from\("studio_settings"\)/);
+assert.match(studioJs, /from\("project_runs"\)/);
+assert.match(studioJs, /run_id: run\.id/);
+assert.match(studioJs, /media_generation_connected: false/);
+assert.match(studioJs, /downloadBrief/);
+
 assert.match(css, /--ruby:#d14155/);
 assert.match(css, /repeating-linear-gradient/);
 assert.match(css, /\.brand-emblem/);
@@ -34,6 +42,30 @@ for (const required of [
   "signup-dialog", "signup-dialog-title", "signup-dialog-description",
   "signup-dialog-instructions", "signup-dialog-close"
 ]) assert.ok(actualIds.has(required), "Missing required control: " + required);
+
+
+// Five independent pages, each with a saving control and honest GO action.
+for(const page of ["project","writing","visual","animation","run"]) {
+  assert.match(html, new RegExp('id="page-' + page + '"'));
+}
+for(const form of ["project-settings-form","visual-form","animation-form","run-form"])
+  assert.match(html, new RegExp('id="' + form + '"'));
+for(const control of [
+  "studio-selector", "project-display-title", "project-description", "visual-concept",
+  "visual-count", "visual-ratio", "visual-world", "visual-character-asset",
+  "visual-style-asset", "animation-start-asset", "animation-goal",
+  "animation-count", "animation-seconds", "run-writing", "run-visual",
+  "run-animation", "run-submit", "run-preflight", "run-status",
+  "runs-list", "runs-empty", "download-brief", "visual-save-info",
+  "animation-save-info"
+]) assert.ok(actualIds.has(control), "Missing studio control: " + control);
+assert.match(html, /Save Project Details/);
+assert.match(html, /Save Writing Draft/);
+assert.match(html, /Save Visual Setup/);
+assert.match(html, /Save Animation Setup/);
+assert.match(html, /GO: Prepare Production Run/);
+assert.match(html, /Media generation is not yet connected/);
+assert.match(js, /studioWorkspace\.loadProject\(project\)/);
 
 assert.match(html, /<dialog id="signup-dialog"/);
 assert.match(html, /aria-labelledby="signup-dialog-title"/);
