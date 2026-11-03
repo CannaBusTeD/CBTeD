@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.production_steps (
  run_id uuid NOT NULL,
  project_id uuid NOT NULL,
  step_key text NOT NULL CHECK (char_length(step_key) BETWEEN 3 AND 120),
+ sequence_index integer NOT NULL CHECK (sequence_index BETWEEN 1 AND 200),
  agent text NOT NULL CHECK (char_length(agent) BETWEEN 3 AND 120),
  studio text NOT NULL CHECK (studio IN ('writing','visual','audio','animation','core')),
  kind text NOT NULL CHECK (kind IN ('text','image','video','audio')),
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.production_steps (
  finished_at timestamptz,
  created_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(run_id,step_key),
+ UNIQUE(run_id,sequence_index),
  FOREIGN KEY (run_id,project_id) REFERENCES public.production_runs(id,project_id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS public.production_approvals (
@@ -100,8 +102,8 @@ BEGIN
    END LOOP;
    IF v_step->>'kind' IN ('image','video','audio') AND coalesce((v_step->>'approval_required')::boolean,false)=false
      THEN RAISE EXCEPTION 'Media execution must require explicit approval';END IF;
-   INSERT INTO public.production_steps(run_id,project_id,step_key,agent,studio,kind,depends_on,approval_required)
-   VALUES(v_run,p_project,v_step->>'key',v_step->>'agent',v_step->>'studio',v_step->>'kind',
+   INSERT INTO public.production_steps(run_id,project_id,sequence_index,step_key,agent,studio,kind,depends_on,approval_required)
+   VALUES(v_run,p_project,v_ix,v_step->>'key',v_step->>'agent',v_step->>'studio',v_step->>'kind',
      ARRAY(SELECT jsonb_array_elements_text(v_step->'depends_on')),coalesce((v_step->>'approval_required')::boolean,false));
    v_keys:=array_append(v_keys,v_step->>'key');
  END LOOP;
