@@ -15,7 +15,7 @@ The language auditor flags formulaic phrasing but cannot determine human or AI a
 
 ## Two distinct instructions
 - **Plan**: preview the deterministic stages without database mutation or generation.
-- **Execute**: register an owned production run. Registration still does not run any generator. Every stage must be explicitly claimed; claim checks required predecessors, locked-rule snapshot, current state and any required step approval.
+- **Execute**: register an owned production run. Registration still does not run any generator. Every stage must be explicitly claimed; claim checks required predecessors, locked-rule snapshot, current state and any required step approval. Production creation also verifies that the complete submitted stage graph exactly matches the database's canonical stage sequence for the selected workflow and requested media count. A caller cannot silently omit editorial, proofreading or verification stages.
 
 ## Production safety
 - Project ownership derives from Supabase Authentication; database transitions are atomic and refuse access to other owners.
@@ -50,3 +50,7 @@ This is an orchestration foundation, not a fully autonomous video-production ser
 - `cbted-mcp` authenticated account access was confirmed by successfully listing real CBTeD project records; core master-rule retrieval succeeded.
 - The orchestrator and MCP Edge Functions were manually deployed. Live browser UI, paid creative calls, multimodal image judgement, second-user denial and complete media assembly remain unverified.
 - Supabase security advisor emits an intentional WARNING for authenticated, ownership-checked `SECURITY DEFINER` RPCs; those functions have explicit `auth.uid()`/owner checks but need a dedicated security review. The project also reports an unrelated existing leaked-password-protection warning.
+
+## Mandatory canonical graph validation
+
+The production creation RPC now recomputes the authoritative stage graph independently of the browser or model, then rejects any plan whose ordered keys, agent roles, dependencies, output types or approval flags differ. Migration `20261103174500_enforce_canonical_production_plan.sql` installs `cbted_canonical_plan` and updates `cbted_prepare_production`. Both helpers are denied direct execution by ordinary client roles. A rollback-only Supabase test confirmed that a one-step image plan is rejected and that the full 2-image plan can advance only after prerequisite stages and explicit approval. This is a structural guard: it does not magically interpret whether the user's natural-language request was understood correctly, so user-visible previews and tests remain necessary.
