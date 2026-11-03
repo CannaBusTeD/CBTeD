@@ -10,6 +10,9 @@ assert.match(html, /<script type="module" src="\.\/app\.js"><\/script>/);
 // Site branding must use the actual optimised emblem asset, not substitute art.
 assert.match(html, /class="brand-emblem" src="\.\/assets\/cbted-emblem\.webp"/);
 assert.match(html, /rel="icon" type="image\/webp"/);
+const logoBytes = readFileSync("app/assets/cbted-emblem.webp");
+assert.equal(logoBytes.subarray(0, 4).toString(), "RIFF", "Approved logo WebP asset missing or invalid");
+
 assert.match(html, /CBTeD Studios \| Creative Project Manager/);
 assert.match(html, /WRITING/);
 assert.match(html, /VISUAL/);
