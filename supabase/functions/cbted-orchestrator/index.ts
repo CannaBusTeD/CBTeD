@@ -137,6 +137,10 @@ async function runImage(prompt,user,project,token){
 }
 async function executeOne(token,user,s){
  if(Deno.env.get("CBTED_ALLOW_PAID_GENERATION")!=="true")throw Error("Paid model execution is disabled");
+ const cap=Number(Deno.env.get("CBTED_MAX_PAID_STEPS_PER_RUN")||0);
+ if(!Number.isInteger(cap)||cap<1||cap>200)throw Error("Set an explicit safe CBTED_MAX_PAID_STEPS_PER_RUN (1..200)");
+ const attempted=s.steps.reduce((n,x)=>n+(x.attempt_number||0),0);
+ if(attempted>=cap)throw Error("Run reached its configured paid-operation cap");
  if(s.run.status==="completed"||s.run.status==="cancelled")throw Error("Run is closed");
  const planned=planFromState(s),states=Object.fromEntries(s.steps.map(x=>[x.step_key,x.status]));
  const approvals=latestDecisions(s.approvals);
