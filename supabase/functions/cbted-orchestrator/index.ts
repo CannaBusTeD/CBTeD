@@ -79,20 +79,20 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const previous=s.steps.filter(x=>x.status==="passed").map(x=>({stage:x.step_key,text:x.output_text?.slice(0,20000)||"",asset_id:x.asset_id||null}));
  return modelInstruction(step,rulebook,projectRules,original,JSON.stringify(previous),s.run.instructions);
 }
+async function privateImageData(token,asset){
+ if(!asset||!["image/png","image/jpeg","image/webp"].includes(asset.mime_type))throw Error("Unsupported private reference image");
+ const response=await fetch(ROOT+"/storage/v1/object/authenticated/cbted-project-assets/"+asset.storage_path,{headers:{apikey:key(),Authorization:"Bearer "+token}});
+ if(!response.ok)throw Error("Cannot download required private reference image");
+ const bytes=new Uint8Array(await response.arrayBuffer());
+ if(bytes.length>14000000)throw Error("Reference image exceeds permitted input size");
+ let encoded="";for(let i=0;i<bytes.length;i+=24576)encoded+=btoa(String.fromCharCode(...bytes.subarray(i,i+24576)));
+ return "data:"+asset.mime_type+";base64,"+encoded;
+}
 async function loadActualImage(token,project,previousStep){
  if(!previousStep?.asset_id)throw Error("Actual preceding image is missing");
  const assets=await rest(token,"assets",{id:"eq."+previousStep.asset_id,project_id:"eq."+project,limit:"1"});
- const asset=assets[0];if(!asset||!["image/png","image/jpeg","image/webp"].includes(asset.mime_type))throw Error("Unsupported or missing stored image");
- const response=await fetch(ROOT+"/storage/v1/object/authenticated/cbted-project-assets/"+asset.storage_path,{
-  headers:{apikey:key(),Authorization:"Bearer "+token}
- });
- if(!response.ok)throw Error("Cannot download private image for inspection");
- const bytes=new Uint8Array(await response.arrayBuffer());
- if(bytes.length>20000000)throw Error("Image exceeds model review size limit");
- let encoded="";for(let i=0;i<bytes.length;i+=24576){
-  encoded+=btoa(String.fromCharCode(...bytes.subarray(i,i+24576)));
- }
- return "data:"+asset.mime_type+";base64,"+encoded;
+ const asset=assets[0];if(!asset)throw Error("Actual stored image not found");
+ return privateImageData(token,asset);
 }
 async function runText(prompt,imageDataUrl=null){
 
@@ -109,17 +109,30 @@ async function runText(prompt,imageDataUrl=null){
 async function runImage(prompt,user,project,token){
  const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_IMAGE_MODEL");
  if(!secret||!model)throw Error("Image provider is not configured");
- const result=await requestJSON("https://api.openai.com/v1/images/generations",
- {Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",{model,prompt:prompt.slice(0,30000),n:1,output_format:"png"});
+ const size=Deno.env.get("CBTED_IMAGE_SIZE")||"1536x864";
+ const dimensions=/^(\\d{3,4})x(\\d{3,4})$/.exec(size),width=Number(dimensions?.[1]),height=Number(dimensions?.[2]);
+ if(!dimensions||width%16||height%16||width>3840||height>2160||width/height>3||height/width>3)
+  throw Error("Image size must be valid supported WIDTHxHEIGHT");
+ const allAssets=await rest(token,"assets",{project_id:"eq."+project,limit:"200"});
+ const references=allAssets.filter(a=>["reference","character_reference","style_reference","input_reference"].includes(a.asset_role)&&["image/png","image/jpeg","image/webp"].includes(a.mime_type));
+ if(references.length>16)throw Error("More than 16 reference images: select a smaller project reference set");
+ const images=[];for(const ref of references)images.push({image_url:await privateImageData(token,ref)});
+ const result=await requestJSON("https://api.openai.com/v1/images/"+(images.length?"edits":"generations"),
+ {Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",
+ {...(images.length?{images}:{}),model,prompt:prompt.slice(0,30000),size,n:1,output_format:"png"});
  const base64=result.data?.[0]?.b64_json;
  if(!base64||base64.length>50000000)throw Error("No valid image received from provider");
  const binary=atob(base64),bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+ if(bytes.length<24||String.fromCharCode(...bytes.slice(1,4))!=="PNG")throw Error("Image provider did not return PNG");
+ const picture=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+ const actualWidth=picture.getUint32(16),actualHeight=picture.getUint32(20);
+ if(actualWidth!==width||actualHeight!==height)throw Error("Image output dimensions differ from the requested size");
  const id=crypto.randomUUID(),path=user+"/"+project+"/images/"+id+".png";
  const upload=await fetch(ROOT+"/storage/v1/object/cbted-project-assets/"+path,{
  method:"POST",headers:{apikey:key(),Authorization:"Bearer "+token,"Content-Type":"image/png","x-upsert":"false"},body:bytes});
  if(!upload.ok)throw Error("Generated image could not be persisted: "+upload.status);
  const asset=await requestJSON(ROOT+"/rest/v1/assets",dbHeaders(token,true),"POST",
- {project_id:project,asset_role:"generated",filename:id+".png",storage_path:path,mime_type:"image/png",metadata:{provider:"openai-images",model}});
+ {project_id:project,asset_role:"generated",filename:id+".png",storage_path:path,mime_type:"image/png",width,height,metadata:{provider:"openai-images",model,reference_asset_ids:references.map(a=>a.id)}});
  return {asset_id:asset?.[0]?.id,provider:"openai-images",model};
 }
 async function executeOne(token,user,s){
