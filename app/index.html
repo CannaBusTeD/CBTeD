@@ -3,9 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#121b28">
+  <meta name="theme-color" content="#250c16">
   <meta name="description" content="CBTeD: a source-first shared project manager for Writing, Visual and Animation studios.">
-  <title>CBTeD | Project Manager</title>
+  <title>CBTeD Studios | Creative Project Manager</title>
+  <meta property="og:title" content="CBTeD Studios">
+  <meta property="og:description" content="Three creative studios. One shared project. Writing, Visual and Animation.">
+  <meta property="og:image" content="https://cannabusted.github.io/CBTeD/assets/cbted-emblem.webp">
+  <link rel="icon" type="image/webp" sizes="96x96" href="./assets/cbted-emblem.webp">
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.js"></script>
 </head>
@@ -13,12 +17,19 @@
 <a class="skip-link" href="#main">Skip to main content</a>
 <header class="site-header">
   <div class="container header-inner">
-    <div><p class="eyebrow">CBTeD / PROJECT CORE</p><h1>Creative Project Manager</h1></div>
-    <span class="pill">Foundation release</span>
+    <a class="brand-lockup" href="./" aria-label="CBTeD Studios, project manager home">
+      <img class="brand-emblem" src="./assets/cbted-emblem.webp" alt="" width="96" height="96" fetchpriority="high">
+      <span class="brand-text">
+        <span class="eyebrow brand-name">CBTeD</span>
+        <span class="brand-studios" aria-hidden="true">STUDIOS</span>
+        <span class="brand-subtitle">Creative Project Manager</span>
+      </span>
+    </a>
+    <span class="header-descriptor">WRITING <span aria-hidden="true">•</span> VISUAL <span aria-hidden="true">•</span> ANIMATION</span>
   </div>
 </header>
 <main id="main" class="container">
-  <p class="intro">Keep the original writing, reference files, approved versions and studio tasks together. Creative work stays private to its project owner.</p>
+  <p class="intro"><strong>Three studios. One project.</strong> Keep your writing, character references, approved images and video plans together, with versions and decisions recorded as you work.</p>
   <div id="status" class="status" role="status" aria-live="polite">Loading…</div>
   <section id="auth-panel" class="panel" aria-labelledby="auth-heading">
     <h2 id="auth-heading">Sign in or create an account</h2>
