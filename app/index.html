@@ -72,12 +72,83 @@
         <ul id="project-list" class="clean-list" aria-label="Your projects"></ul>
       </aside>
       <div id="project-details" class="main-column" hidden>
-        <section class="panel" aria-labelledby="selected-heading">
-          <p class="eyebrow">SELECTED PROJECT</p>
+        <nav class="studio-navigation panel" aria-label="Choose a studio">
+          <label for="studio-selector">Which studio would you like to work in?
+            <select id="studio-selector">
+              <option value="project">1. Project setup, rules and files</option>
+              <option value="writing">2. Writing Studio: lyrics, stories and ideas</option>
+              <option value="visual">3. Visual Studio: image generation setup</option>
+              <option value="animation">4. Animation Studio: video generation setup</option>
+              <option value="run">5. GO: Prepare production</option>
+            </select>
+          </label>
+          <p id="studio-nav-help" class="hint">Choose a studio, complete its boxes, then use Save at the bottom of that studio page. You can return to any studio without losing saved versions.</p>
+        </nav>
+        <div id="page-project" class="studio-page" data-studio-page="project">
+          <section class="panel" aria-labelledby="selected-heading">
+          <p class="eyebrow">PROJECT WORKSPACE</p>
           <h2 id="selected-heading"></h2>
           <p id="project-summary" class="hint"></p>
+          <form id="project-settings-form">
+            <label for="project-display-title">Project title
+              <input id="project-display-title" maxlength="200" required placeholder="What is your project called?">
+            </label>
+            <label for="project-description">What is this project about?
+              <textarea id="project-description" class="compact-textarea" rows="5" placeholder="Describe your song, story, film, video or creative project."></textarea>
+            </label>
+            <div class="page-save-actions">
+              <button type="submit">Save Project Details</button>
+              <p id="project-save-info" class="hint" role="status" aria-live="polite">Changes to the title or description are saved here.</p>
+            </div>
+          </form>
         </section>
-        <section class="panel" aria-labelledby="writing-heading">
+          <section class="panel" aria-labelledby="rules-heading">
+          <h2 id="rules-heading">Project rules and corrections</h2>
+          <p>Store project-specific rules separately from the three studios' master instructions. Revisions retain their history.</p>
+          <form id="rule-form">
+            <div class="fields">
+              <label>Applies to
+                <select id="rule-scope"><option value="project">Whole project</option><option value="writing">Writing</option><option value="visual">Visual</option><option value="animation">Animation</option></select>
+              </label>
+              <label>Name this rule <input id="rule-key" maxlength="160" placeholder="e.g. Main character always wears a black hat" required></label>
+              <label>Kind
+                <select id="rule-kind"><option value="constraint">Constraint</option><option value="correction">Correction</option><option value="decision">Decision</option><option value="preference">Preference</option><option value="reference">Reference</option></select>
+              </label>
+            </div>
+            <label>Describe the rule or correction <textarea id="rule-body" rows="4" required placeholder="Write exactly what must stay the same or what needs to change."></textarea></label>
+            <button type="submit">Save rule revision</button>
+          </form>
+          <h3>Current project rules</h3>
+          <p id="rules-empty" class="hint">No project-specific rules saved.</p>
+          <ul id="rules-list" class="clean-list"></ul>
+        </section>
+          <section class="panel" aria-labelledby="files-heading">
+          <div class="section-heading"><h2 id="files-heading">Private project files</h2><span class="pill">All studios</span></div>
+          <p>Reference photos, documents, sound and video files are stored privately. Each upload gets a unique path.</p>
+          <form id="file-form">
+            <div class="fields">
+              <label>File category
+                <select id="file-category">
+                  <option value="references">Reference images and files</option>
+                  <option value="writing">Writing files</option>
+                  <option value="images">Generated images</option>
+                  <option value="videos">Video clips</option>
+                  <option value="audio">Audio</option>
+                  <option value="exports">Exports</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>Choose a file <input id="project-file" type="file" required></label>
+            </div>
+            <button type="submit">Upload private file</button>
+          </form>
+          <h3>Files in this project</h3>
+          <p id="files-empty" class="hint">No files uploaded.</p>
+          <ul id="files-list" class="clean-list"></ul>
+        </section>
+        </div>
+        <div id="page-writing" class="studio-page" data-studio-page="writing" hidden>
+          <section class="panel" aria-labelledby="writing-heading">
           <div class="section-heading"><h2 id="writing-heading">Writing Studio: your words and ideas</h2><span class="pill">Writing</span></div>
           <p>Keep what you've already written separate from your ideas and possible rewrites. You can start with just an idea. Each time you save, CBTeD keeps a new version without replacing the earlier one.</p>
           <div class="fields">
@@ -117,10 +188,7 @@
               <p id="writing-suggestions-help" class="hint">Put possible rewrites or suggested lines here. They remain suggestions and won't replace your current lyrics.</p>
               <textarea id="writing-suggestions" class="compact-textarea" rows="5" spellcheck="true" aria-describedby="writing-suggestions-help" placeholder="Suggested lyrics: alternative lines or possible verses to consider later."></textarea>
             </div>
-            <div class="actions">
-              <button type="submit">Save my draft</button>
-              <button type="button" id="new-source" class="secondary">Start a different piece of writing</button>
-            </div>
+
           </form>
           <p id="version-info" class="hint" aria-live="polite">Nothing saved yet. Enter a title and something in at least one writing box.</p>
           <div class="actions">
@@ -128,52 +196,178 @@
             <button type="button" id="handoff-source" class="secondary" disabled>Prepare approved writing for Visual Studio</button>
           </div>
           <p id="approval-info" class="hint">You choose which saved version is approved. Ideas and suggested lines stay separate from your current writing.</p>
+          <div class="page-save-actions">
+            <button type="submit" form="source-form">Save Writing Draft</button>
+            <button type="button" id="new-source" class="secondary">Start another piece of writing</button>
+          </div>
         </section>
-        <section class="panel" aria-labelledby="rules-heading">
-          <h2 id="rules-heading">Project rules and corrections</h2>
-          <p>Store project-specific rules separately from the three studios' master instructions. Revisions retain their history.</p>
-          <form id="rule-form">
+        </div>
+        <div id="page-visual" class="studio-page" data-studio-page="visual" hidden>
+          <section class="panel" aria-labelledby="visual-heading">
+          <div class="section-heading"><h2 id="visual-heading">Visual Studio</h2><span class="pill">Image generation</span></div>
+          <p>Describe the images you want and connect the right character, style and location references. Each requested image is a separate task. Saving this page does not generate an image.</p>
+          <form id="visual-form">
+            <label for="visual-purpose">What are these images for?
+              <select id="visual-purpose">
+                <option value="song">Song or music video</option>
+                <option value="story">Story or narrative</option>
+                <option value="poster">Poster or key art</option>
+                <option value="thumbnail">Thumbnail or cover</option>
+                <option value="animation">Still frames for animation</option>
+                <option value="other">Other project</option>
+              </select>
+            </label>
+            <label for="visual-source-ref">Approved writing to illustrate (optional)
+              <select id="visual-source-ref"><option value="">Independent visual concept, without writing</option></select>
+            </label>
+            <label for="visual-concept">What should the images show?
+              <textarea id="visual-concept" rows="5" placeholder="Describe the scenes, emotions or central visual concept." required></textarea>
+            </label>
+            <label for="visual-source-moment">Specific lyric, paragraph or scene to use
+              <textarea id="visual-source-moment" class="compact-textarea" rows="3" placeholder="Exact line or moment in the source. For a set, describe which moments should be explored."></textarea>
+            </label>
             <div class="fields">
-              <label>Applies to
-                <select id="rule-scope"><option value="project">Whole project</option><option value="writing">Writing</option><option value="visual">Visual</option><option value="animation">Animation</option></select>
+              <label for="visual-count">How many separate images?
+                <input id="visual-count" type="number" min="1" max="50" value="1" required>
               </label>
-              <label>Name this rule <input id="rule-key" maxlength="160" placeholder="e.g. Main character always wears a black hat" required></label>
-              <label>Kind
-                <select id="rule-kind"><option value="constraint">Constraint</option><option value="correction">Correction</option><option value="decision">Decision</option><option value="preference">Preference</option><option value="reference">Reference</option></select>
-              </label>
-            </div>
-            <label>Describe the rule or correction <textarea id="rule-body" rows="4" required placeholder="Write exactly what must stay the same or what needs to change."></textarea></label>
-            <button type="submit">Save rule revision</button>
-          </form>
-          <h3>Current project rules</h3>
-          <p id="rules-empty" class="hint">No project-specific rules saved.</p>
-          <ul id="rules-list" class="clean-list"></ul>
-        </section>
-        <section class="panel" aria-labelledby="files-heading">
-          <div class="section-heading"><h2 id="files-heading">Private project files</h2><span class="pill">All studios</span></div>
-          <p>Reference photos, documents, sound and video files are stored privately. Each upload gets a unique path.</p>
-          <form id="file-form">
-            <div class="fields">
-              <label>File category
-                <select id="file-category">
-                  <option value="references">Reference images and files</option>
-                  <option value="writing">Writing files</option>
-                  <option value="images">Generated images</option>
-                  <option value="videos">Video clips</option>
-                  <option value="audio">Audio</option>
-                  <option value="exports">Exports</option>
-                  <option value="other">Other</option>
+              <label for="visual-ratio">Image shape
+                <select id="visual-ratio">
+                  <option value="16:9">16:9 landscape (video)</option>
+                  <option value="9:16">9:16 portrait (social video)</option>
+                  <option value="1:1">1:1 square</option>
+                  <option value="2:3">2:3 portrait</option>
+                  <option value="3:2">3:2 landscape</option>
+                  <option value="7:3">7:3 extra wide</option>
                 </select>
               </label>
-              <label>Choose a file <input id="project-file" type="file" required></label>
             </div>
-            <button type="submit">Upload private file</button>
+            <label for="visual-world">Visual style and world
+              <textarea id="visual-world" class="compact-textarea" rows="4" placeholder="Photorealistic documentary, cinematic lighting, colour palette, atmosphere, locations, textures."></textarea>
+            </label>
+            <label for="visual-characters">Characters and their appearance
+              <textarea id="visual-characters" class="compact-textarea" rows="4" placeholder="Identity, face, clothing, accessories, poses, and how to keep characters consistent."></textarea>
+            </label>
+            <label for="visual-camera">Camera angles and variety
+              <textarea id="visual-camera" class="compact-textarea" rows="3" placeholder="Close-ups, overhead shots, different locations, interactions, visual metaphors."></textarea>
+            </label>
+            <label for="visual-continuity">What must stay consistent?
+              <textarea id="visual-continuity" class="compact-textarea" rows="3" placeholder="Fixed character details, wardrobe, props, source continuity, established visual world."></textarea>
+            </label>
+            <label for="visual-restrictions">Things to avoid or correct
+              <textarea id="visual-restrictions" class="compact-textarea" rows="3" placeholder="Unwanted repeats, incorrect colours or clothing, mistakes to prevent."></textarea>
+            </label>
+            <h3>Reference images</h3>
+            <p class="hint">Upload reference photos under Project setup → Private project files. Then return here and assign each file its proper role.</p>
+            <div class="fields">
+              <label for="visual-character-asset">Character identity photo
+                <select id="visual-character-asset"><option value="">No character photo selected</option></select>
+              </label>
+              <label for="visual-style-asset">Style reference image
+                <select id="visual-style-asset"><option value="">No style image selected</option></select>
+              </label>
+              <label for="visual-location-asset">Location reference image
+                <select id="visual-location-asset"><option value="">No location image selected</option></select>
+              </label>
+              <label for="visual-object-asset">Prop or object reference image
+                <select id="visual-object-asset"><option value="">No object image selected</option></select>
+              </label>
+            </div>
+            <label for="visual-thumbnail-title">Exact thumbnail or poster text, if needed
+              <input id="visual-thumbnail-title" placeholder="Type the exact title and artist wording here">
+            </label>
+            <div class="page-save-actions">
+              <button type="submit">Save Visual Setup</button>
+              <p id="visual-save-info" class="hint" role="status" aria-live="polite">No Visual setup saved yet.</p>
+            </div>
           </form>
-          <h3>Files in this project</h3>
-          <p id="files-empty" class="hint">No files uploaded.</p>
-          <ul id="files-list" class="clean-list"></ul>
         </section>
-        <section class="panel" aria-labelledby="tasks-heading">
+        </div>
+        <div id="page-animation" class="studio-page" data-studio-page="animation" hidden>
+          <section class="panel" aria-labelledby="animation-heading">
+          <div class="section-heading"><h2 id="animation-heading">Animation Studio</h2><span class="pill">Image to video</span></div>
+          <p>Set the actions, camera motion, sound and continuity for each video clip. Motion prompts describe what changes over time in the approved still image. Saving here does not render a video.</p>
+          <form id="animation-form">
+            <label for="animation-source-ref">Approved writing or scene (optional)
+              <select id="animation-source-ref"><option value="">Independent animation concept</option></select>
+            </label>
+            <label for="animation-start-asset">Approved starting image (if available)
+              <select id="animation-start-asset"><option value="">Select an image after uploading it</option></select>
+            </label>
+            <label for="animation-goal">What happens in this scene?
+              <textarea id="animation-goal" rows="5" required placeholder="Describe the action, change and emotional beat that should unfold in the video."></textarea>
+            </label>
+            <div class="fields">
+              <label for="animation-count">How many separate video clips?
+                <input id="animation-count" type="number" min="1" max="50" value="1" required>
+              </label>
+              <label for="animation-seconds">Seconds per clip
+                <input id="animation-seconds" type="number" min="1" max="300" value="10" required>
+              </label>
+              <label for="animation-ratio">Video shape
+                <select id="animation-ratio">
+                  <option value="16:9">16:9 landscape</option>
+                  <option value="9:16">9:16 portrait</option>
+                  <option value="1:1">1:1 square</option>
+                  <option value="7:3">7:3 extra wide</option>
+                </select>
+              </label>
+              <label for="animation-provider">Preferred video generator
+                <select id="animation-provider">
+                  <option value="unselected">Choose later (provider not connected)</option>
+                  <option value="runway">Runway (requires provider connection)</option>
+                  <option value="kling">Kling (requires provider connection)</option>
+                  <option value="grok">Other image-to-video provider (requires connection)</option>
+                </select>
+              </label>
+            </div>
+            <label for="animation-subject">Subject movement and action
+              <textarea id="animation-subject" class="compact-textarea" rows="3" placeholder="Who moves, how their body acts, and what changes first, next and last."></textarea>
+            </label>
+            <label for="animation-camera">Camera movement
+              <textarea id="animation-camera" class="compact-textarea" rows="3" placeholder="Push-in, tracking, orbit, tilt, locked shot, crane movement, shot changes."></textarea>
+            </label>
+            <label for="animation-atmosphere">Environment and atmosphere in motion
+              <textarea id="animation-atmosphere" class="compact-textarea" rows="3" placeholder="Moving light, rain, fog, fabric, traffic, reflections or background activity."></textarea>
+            </label>
+            <label for="animation-audio">Audio, dialogue and ambience
+              <textarea id="animation-audio" class="compact-textarea" rows="3" placeholder="Exact dialogue if supplied, room tone, sound effects or atmosphere."></textarea>
+            </label>
+            <label for="animation-continuity">What must remain the same?
+              <textarea id="animation-continuity" class="compact-textarea" rows="3" placeholder="Reference character, clothing, starting image, physical geography and end-frame continuity."></textarea>
+            </label>
+            <div class="page-save-actions">
+              <button type="submit">Save Animation Setup</button>
+              <p id="animation-save-info" class="hint" role="status" aria-live="polite">No Animation setup saved yet.</p>
+            </div>
+          </form>
+        </section>
+        </div>
+        <div id="page-run" class="studio-page" data-studio-page="run" hidden>
+          <section class="panel" aria-labelledby="run-heading">
+          <div class="section-heading"><h2 id="run-heading">GO: Prepare your production</h2><span class="pill">Production control</span></div>
+          <p>Select the studios you want to use. GO saves a dated production snapshot and creates the relevant work records. It can also create a downloadable production brief.</p>
+          <p class="run-warning">Media generation is not yet connected: GO prepares and tracks work, but it cannot claim to have generated images or video clips. Those tasks are recorded as waiting for an authorised generation provider.</p>
+          <form id="run-form">
+            <fieldset class="stage-choices">
+              <legend>Which stages should this run include?</legend>
+              <label><input id="run-writing" type="checkbox" checked> Writing: use my saved draft</label>
+              <label><input id="run-visual" type="checkbox"> Visual: use my saved image setup</label>
+              <label><input id="run-animation" type="checkbox"> Animation: use my saved video setup</label>
+            </fieldset>
+            <div id="run-preflight" class="preflight" role="status" aria-live="polite">Select stages to check what is ready.</div>
+            <div class="page-save-actions">
+              <button id="run-submit" type="submit">GO: Prepare Production Run</button>
+              <p id="run-status" class="hint" role="status" aria-live="polite">Nothing started yet.</p>
+            </div>
+          </form>
+          <div class="actions">
+            <button type="button" id="download-brief" class="secondary" disabled>Download latest production brief</button>
+          </div>
+          <h3>Previous production runs</h3>
+          <p id="runs-empty" class="hint">No production runs saved yet.</p>
+          <ul id="runs-list" class="clean-list"></ul>
+        </section>
+          <section class="panel" aria-labelledby="tasks-heading">
           <div class="section-heading"><h2 id="tasks-heading">Studio tasks</h2><span class="pill">Shared progress</span></div>
           <p>Track work in Writing, Visual or Animation. Creating a task records it, but does not start AI generation.</p>
           <form id="task-form">
@@ -190,12 +384,13 @@
           <p id="tasks-empty" class="hint">No tasks recorded.</p>
           <ul id="tasks-list" class="clean-list"></ul>
         </section>
-        <section class="panel" aria-labelledby="handoffs-heading">
+          <section class="panel" aria-labelledby="handoffs-heading">
           <h2 id="handoffs-heading">Studio handoffs</h2>
           <p>An approved writing version can be handed off to Visual Studio without changing the source text.</p>
           <p id="handoffs-empty" class="hint">No handoffs recorded.</p>
           <ul id="handoffs-list" class="clean-list"></ul>
         </section>
+        </div>
       </div>
     </div>
   </section>
