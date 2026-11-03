@@ -7,11 +7,11 @@ Status: **Initial database schema and private project asset storage deployed**. 
 - Dedicated Supabase project: **CBTeD**.
 - Schema: `public`.
 - Applied migration: `20261102214053_create_cbted_shared_project_foundation` (name: `create_cbted_shared_project_foundation`).
-- Project was empty before deployment. Ten tables were created.
-- All ten tables have PostgreSQL row-level security (RLS) enabled.
+- Project was empty before deployment. Ten foundation tables were created, followed by two added studio-specific tables.
+- All twelve tables have PostgreSQL row-level security (RLS) enabled.
 - The owner is identified by Supabase Authentication user ID (`auth.uid()`).
 - At this stage each project has **one owner**, not a collaboration/membership model.
-- Anonymous role has no SELECT privilege on any of these ten tables.
+- Anonymous role has no SELECT privilege on any of these twelve tables.
 - All user access to these tables is restricted by RLS policies to the project's owner.
 - Public-client deletion is not granted. Versions, rules, approvals, outputs and history are append-only from the client API's perspective.
 - Supabase security advisors reported **zero lints** after schema deployment and again after storage configuration.
@@ -32,6 +32,8 @@ Status: **Initial database schema and private project asset storage deployed**. 
 | `approvals` | Append-only decisions approving, rejecting or revoking a source version, asset or output | Each event names **exactly one** target in the same project and records the acting authenticated user |
 | `handoffs` | Transfers between two different studios | Records from/to studio, linked task/source/asset/output, state and handoff payload |
 | `activity_events` | Append-only project/task action history | Type, acting user, details, timestamp and project ownership |
+| `studio_settings` | Append-only saved Visual and Animation setup versions | One settings JSON snapshot per project/studio/version; optional approved writing source reference; owner-only access |
+| `project_runs` | Immutable GO production snapshots and selected studios | UUID request ID for idempotency, owner-only access; one run is parent of the blocked studio tasks |
 
 Project-scoped foreign keys include the project ID, preventing a task, asset, source version, approval or handoff from silently referencing a record in another project. This complements the row-level security policies.
 
@@ -55,6 +57,16 @@ Project-scoped foreign keys include the project ID, preventing a task, asset, so
 - The nonempty-version check now accepts existing content, ideas, suggested text or a storage file. A user can save ideas before writing any lyrics.
 - Every version retains all three fields as one snapshot, but each field stays clearly separated. Suggested lines do **not** replace current lyrics or become automatically approved.
 - Migration SQL is retained under `supabase/recorded-migrations/` as an already-applied reference, not a script to run again.
+
+## CBTeD Studios v2 production settings and runs
+
+- Applied migration `20261103010500_add_studio_settings_and_project_runs`: creates owner-only RLS tables `studio_settings` and `project_runs` and adds an optional `run_id` on existing `tasks`.
+- Applied migration `20261103011441_atomic_preproduction_run`: creates the authenticated `public.prepare_project_run` function, declared `SECURITY INVOKER`, which enforces project ownership through normal RLS and creates the run and one task per chosen studio **in the same database transaction**.
+- Visual and Animation setup saves are append-only versions; existing writing draft versions remain unchanged.
+- GO creates a **preproduction run** and tasks marked `blocked` with zero completed outputs while provider integration is absent. It does not simulate or claim completed image/video generation.
+- The run snapshot records exact saved setup versions, chosen source versions, assigned reference-file IDs, project-specific rules and stage selection, and can be downloaded in JSON.
+- A rollback-only impersonated authenticated test created a run with one blocked task and left no test rows. A second simulated user identity could not read the owner's existing projects.
+- Row-level security and explicit grants were checked for the two new tables. Supabase currently reports a separate Authentication warning about leaked-password protection being disabled; see the platform security-advisor remediation for enabling it.
 
 ## Private asset storage configuration
 
