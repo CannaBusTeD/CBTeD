@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "app/**"
+      - "tests/**"
       - ".github/workflows/deploy-cbted-manager.yml"
   workflow_dispatch:
 
