@@ -7,6 +7,19 @@ const config = readFileSync("app/config.js", "utf8");
 const workflow = readFileSync(".github/workflows/deploy-cbted-manager.yml", "utf8");
 
 assert.match(html, /<script type="module" src="\.\/app\.js"><\/script>/);
+// Site branding must use the actual optimised emblem asset, not substitute art.
+assert.match(html, /class="brand-emblem" src="\.\/assets\/cbted-emblem\.webp"/);
+assert.match(html, /rel="icon" type="image\/webp"/);
+assert.match(html, /CBTeD Studios \| Creative Project Manager/);
+assert.match(html, /WRITING/);
+assert.match(html, /VISUAL/);
+assert.match(html, /ANIMATION/);
+const css = readFileSync("app/styles.css", "utf8");
+assert.match(css, /--ruby:#d14155/);
+assert.match(css, /repeating-linear-gradient/);
+assert.match(css, /\.brand-emblem/);
+assert.match(css, /\.brand-studios/);
+
 const actualIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
 const referencedIds = new Set([...js.matchAll(/\$\("([^"]+)"\)/g)].map((match) => match[1]));
 const missing = [...referencedIds].filter((id) => !actualIds.has(id));
