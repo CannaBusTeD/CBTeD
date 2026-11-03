@@ -27,6 +27,11 @@ assert.match(studioJs, /p_task_specs: tasks/);
 assert.match(studioJs, /media_generation_connected: false/);
 assert.match(studioJs, /media_generation_connected: false/);
 assert.match(studioJs, /downloadBrief/);
+assert.match(studioJs, /uploadStudioImages/);
+assert.match(studioJs, /visual-clothing-asset/);
+assert.match(studioJs, /visual-composition-asset/);
+assert.match(studioJs, /visual-thumbnail-policy/);
+assert.match(studioJs, /contains unsaved changes/);
 
 assert.match(css, /--ruby:#d14155/);
 assert.match(css, /repeating-linear-gradient/);
@@ -56,7 +61,11 @@ for(const page of ["project","writing","visual","animation","run"]) {
 for(const form of ["project-settings-form","visual-form","animation-form","run-form"])
   assert.match(html, new RegExp('id="' + form + '"'));
 for(const control of [
-  "studio-selector", "project-display-title", "project-description", "visual-concept",
+  "studio-selector", "project-display-title", "project-description",
+  "visual-clothing-asset", "visual-composition-asset", "visual-thumbnail-policy",
+  "visual-upload-file", "visual-upload-button", "visual-upload-status",
+  "animation-upload-file", "animation-upload-button", "animation-upload-status",
+  "visual-concept",
   "visual-count", "visual-ratio", "visual-world", "visual-character-asset",
   "visual-style-asset", "animation-start-asset", "animation-goal",
   "animation-count", "animation-seconds", "run-writing", "run-visual",
