@@ -79,12 +79,28 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const previous=s.steps.filter(x=>x.status==="passed").map(x=>({stage:x.step_key,text:x.output_text?.slice(0,20000)||"",asset_id:x.asset_id||null}));
  return modelInstruction(step,rulebook,projectRules,original,JSON.stringify(previous),s.run.instructions);
 }
-async function runText(prompt){
+async function loadActualImage(token,project,previousStep){
+ if(!previousStep?.asset_id)throw Error("Actual preceding image is missing");
+ const assets=await rest(token,"assets",{id:"eq."+previousStep.asset_id,project_id:"eq."+project,limit:"1"});
+ const asset=assets[0];if(!asset||!["image/png","image/jpeg","image/webp"].includes(asset.mime_type))throw Error("Unsupported or missing stored image");
+ const response=await fetch(ROOT+"/storage/v1/object/authenticated/cbted-project-assets/"+asset.storage_path,{
+  headers:{apikey:key(),Authorization:"Bearer "+token}
+ });
+ if(!response.ok)throw Error("Cannot download private image for inspection");
+ const bytes=new Uint8Array(await response.arrayBuffer());
+ if(bytes.length>20000000)throw Error("Image exceeds model review size limit");
+ let encoded="";for(let i=0;i<bytes.length;i+=24576){
+  encoded+=btoa(String.fromCharCode(...bytes.subarray(i,i+24576)));
+ }
+ return "data:"+asset.mime_type+";base64,"+encoded;
+}
+async function runText(prompt,imageDataUrl=null){
+
  const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_TEXT_MODEL");
  if(!secret||!model)throw Error("Text provider is not configured");
  const result=await requestJSON("https://api.openai.com/v1/responses",
  {Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",
- {model,store:false,input:[{role:"user",content:[{type:"input_text",text:prompt}]}],max_output_tokens:8000});
+ {model,store:false,input:[{role:"user",content:[{type:"input_text",text:prompt},...(imageDataUrl?[{type:"input_image",image_url:imageDataUrl,detail:"high"}]:[])]}],max_output_tokens:8000});
  if(result.status!=="completed")throw Error("Text provider did not complete");
  const text=result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||"";
  if(!text.trim())throw Error("Text provider returned no content");
@@ -119,6 +135,8 @@ async function executeOne(token,user,s){
  }
  if(!chosen)return {executed:false,blocked};
  if(!["text","image"].includes(chosen.kind))return {executed:false,blocked:[{step:chosen.key,reason:"No configured backend adapter for "+chosen.kind+"; actual generation required"}]};
+ if(["audio_reviewer","video_reviewer","release_auditor"].includes(chosen.agent))
+   return {executed:false,blocked:[{step:chosen.key,reason:"Cannot honestly review actual audio/video without a media-inspection adapter"}]};
  const actual=s.steps.find(x=>x.step_key===chosen.key);
  const other=s.steps.filter(x=>x.status==="passed");
  // Prompt engineer output is authoritative for each individual image.
@@ -131,17 +149,23 @@ async function executeOne(token,user,s){
  const rules=await rest(token,"project_rules",{project_id:"eq."+s.run.project_id,order:"created_at.desc",limit:"500"});
  const original=[src?.content||"",src?.ideas||"",src?.suggested_text||""].filter(Boolean).join("\n\n");
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
- const prompt=takePrompt(s,chosen,rulebook,original,projectRules);
+ let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
+ const isReview=["writing_reviewer","image_reviewer"].includes(chosen.agent);
+ if(isReview)prompt+="\\n\\nBegin with VERDICT: PASS only if the checked content meets all hard requirements. Otherwise begin with VERDICT: REPAIR and detail the defects. Never falsely approve.";
+ const imageData=chosen.agent==="image_reviewer"
+   ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
+   :null;
  await rpc(token,"cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
-   const result=chosen.kind==="text"?await runText(prompt):await runImage(
+   const result=chosen.kind==="text"?await runText(prompt,imageData):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token);
+   const reviewFailed=isReview&&!/^VERDICT:\\s*PASS\\b/i.test(result.text||"");
    await rpc(token,"cbted_finish_production_step",{
-    p_run:s.run.id,p_step:chosen.key,p_result:"passed",
+    p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
     p_text:result.text||null,p_asset:result.asset_id||null,
     p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,check:"provider_returned_and_recorded"}
    });
-   return {executed:true,step:chosen.key,kind:chosen.kind,asset_id:result.asset_id||null};
+   return {executed:true,step:chosen.key,kind:chosen.kind,asset_id:result.asset_id||null,review_failed:reviewFailed};
  }catch(e){
    await rpc(token,"cbted_finish_production_step",{p_run:s.run.id,p_step:chosen.key,p_result:"failed",p_evidence:{reason:String(e.message||e).slice(0,300)}}).catch(()=>{});
    throw e;
