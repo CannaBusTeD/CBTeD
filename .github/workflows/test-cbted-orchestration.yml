@@ -16,6 +16,7 @@ jobs:
           node-version: '22'
       - name: Check syntax of orchestration modules and backend entrypoints
         run: |
+          node --check app/production.js
           node --check supabase/functions/_shared/production.mjs
           node --check --input-type=module < supabase/functions/cbted-orchestrator/index.ts
           node --check --input-type=module < supabase/functions/cbted-mcp/index.ts
