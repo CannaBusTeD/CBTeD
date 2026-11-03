@@ -26,3 +26,5 @@ jobs:
           node tests/check-cbted-mcp.mjs
       - name: Verify live orchestrator and refusal of unauthorised requests
         run: node tests/check-orchestrator-live.mjs
+      - name: Verify the published production interface is available
+        run: node tests/check-production-site.mjs
