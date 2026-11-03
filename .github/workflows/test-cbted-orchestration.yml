@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: ["feature/**"]
+    branches: [main, "feature/**"]
 permissions:
   contents: read
 jobs:
@@ -24,3 +24,5 @@ jobs:
         run: |
           node --test tests/check-production.mjs
           node tests/check-cbted-mcp.mjs
+      - name: Verify live orchestrator and refusal of unauthorised requests
+        run: node tests/check-orchestrator-live.mjs
