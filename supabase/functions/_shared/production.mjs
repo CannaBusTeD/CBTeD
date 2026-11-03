@@ -96,7 +96,7 @@ export function authorisation({plan,step_key,states={},approvals={},rules_change
 }
 export function modelInstruction(step,masterRules,projectRules,original,priorResults,instructions){
   if(!step||!AGENTS[step.agent])throw Error("Unknown agent");
-  return [
+  const payload=[
     "You are the "+step.agent+" specialist in a controlled CBTeD studio.",
     "Do ONLY the task for this agent. Do not call other tools or advance the workflow.",
     "Preserve creator-authored work and approvals. Never claim to have verified anything you have not inspected.",
@@ -106,5 +106,7 @@ export function modelInstruction(step,masterRules,projectRules,original,priorRes
     "Actual original source:",original,
     "Earlier verified stage outputs:",priorResults,
     "This stage and no other:",step.key+" :: "+step.description
-  ].join("\n\n").slice(0,180000);
+  ].join("\n\n");
+  if(payload.length>180000)throw Error("Authoritative context exceeds the configured limit; split or archive project inputs without silently truncating rules");
+  return payload;
 }
