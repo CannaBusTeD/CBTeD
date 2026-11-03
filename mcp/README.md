@@ -9,7 +9,7 @@ The existing web project manager is optional supporting infrastructure. The OAut
 ## Deployed backend
 
 - Supabase project: dmzzyfiwtosxtyekpbfi
-- Edge Function: cbted-mcp, version 2 reported ACTIVE.
+- Edge Function: cbted-mcp, version 3 reported ACTIVE.
 - MCP URL: https://dmzzyfiwtosxtyekpbfi.supabase.co/functions/v1/cbted-mcp
 - Protected resource metadata: https://dmzzyfiwtosxtyekpbfi.supabase.co/functions/v1/cbted-mcp/.well-known/oauth-protected-resource
 - OAuth issuer: https://dmzzyfiwtosxtyekpbfi.supabase.co/auth/v1
@@ -17,7 +17,7 @@ The existing web project manager is optional supporting infrastructure. The OAut
 - Source file: supabase/functions/cbted-mcp/index.ts
 - Simulated protocol and authorization tests: tests/check-cbted-mcp.mjs
 
-The server embeds twelve full rule documents from the GitHub repository, together with their original blob SHA identifiers. Changes to these governing documents require rebundling and redeploying the server. Rules are returned directly to ChatGPT, not replaced by a generic summary.
+The server embeds thirteen full rule documents from the GitHub repository, together with their original blob SHA identifiers. Changes to these governing documents require rebundling and redeploying the server. Rules are returned directly to ChatGPT, not replaced by a generic summary.
 
 ## Tools exposed
 
@@ -43,6 +43,10 @@ Supabase confirms the deployed function is ACTIVE. The source and matching GitHu
 The full ChatGPT OAuth redirect, token audience and refresh-token behaviour remain unverified. The actual plugin is **not yet installed or connected in ChatGPT**.
 
 Security model: public rules may be fetched without authorization; project operations validate a Supabase user bearer and use owner-only row-level security. The function uses a publishable key, never the service-role key. Private asset links expire after 120 seconds. The consent page requires explicit approval and accepts only ChatGPT callback destinations.
+
+## Mandatory post-draft lyric gate
+
+Writing Studio's source now includes `writing/Lyric_Post_Draft_Editorial_Gate.md`. For every newly authored song, the final lyric is the **revised** draft: create draft 1; when a thumbnail is requested, submit one image job once the central concept is established; then execute three distinct stages in ChatGPT: (1) a brutal full-lyric, line-specific synthetic-phrasing critique, (2) editorial recommendations and precise repair plan, and (3) a source-based rewrite. Follow with an independent reread, spoken/sung-cadence proofread, and check that the completed thumbnail still aligns. Keep a previously approved or user-supplied original unchanged unless its revision was authorised. The full governing document is served by `cbted_get_rulebook(studio="writing")`. This procedure is beneath, not a modification of, the universal master.
 
 ## Operational contract
 
