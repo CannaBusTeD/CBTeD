@@ -41,7 +41,7 @@ const rpc=async(method,params={},auth=false)=>{
 };
 const health=await (await handler(new Request(base))).json();
 assert.equal(health.status,"online");
-assert.equal(health.rule_documents,6);
+assert.equal(health.rule_documents,12);
 const meta=await(await handler(new Request(base+"/.well-known/oauth-protected-resource"))).json();
 assert.equal(meta.resource,base);
 assert.equal(meta.authorization_servers[0],"https://"+projectRef+".supabase.co/auth/v1");
@@ -58,7 +58,7 @@ assert.ok(list.result.tools.find(t=>t.name==="cbted_list_projects").securitySche
 const rules=await rpc("tools/call",{name:"cbted_get_rulebook",arguments:{studio:"visual"}});
 assert.equal(rules.result.isError,false);
 const payload=JSON.parse(rules.result.content[0].text);
-assert.equal(payload.documents.length,3);
+assert.equal(payload.documents.length,5);
 assert.match(payload.documents[0].content,/HARD RULE 1/);
 assert.match(payload.documents[2].content,/Visual/);
 assert.equal(networkCalls,0,"Reading public bundled rules must not access private APIs");
