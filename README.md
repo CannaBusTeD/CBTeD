@@ -21,14 +21,18 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 - `cbted-public-config` Edge Function deployed; it serves **only public browser configuration**, never database secrets.
 - `core/Shared_Project_Database.md` documents the deployed schema and storage policies.
 
-### Project manager web app (first version)
+### CBTeD Studios project manager (v2)
 
 - `app/index.html`, `app/styles.css`, `app/app.js` implement a keyboard/screen-reader-friendly project manager.
 - Supports Supabase email/password signup and sign-in, project creation, versioned writing, explicit approvals, project-specific rules, private file uploads/downloads, task records, and a Writing-to-Visual handoff record.
+- A single accessible drop-down now switches among five pages: Project Setup, Writing, Visual, Animation and GO.
+- Each page has a clearly labelled Save control at its bottom. Visual and Animation settings are stored as separate append-only versions in Supabase; existing writing versions are preserved.
+- GO validates saved settings, prepares a real immutable production brief, and atomically records blocked work tasks via `prepare_project_run`. It can export the brief as JSON. Actual generation providers are **not yet connected** and are not falsely represented as having run.
+- The approved CBTeD emblem and ruby/gunmetal/velvet visual identity are integrated throughout.
 - `.github/workflows/deploy-cbted-manager.yml` is a GitHub Pages deployment workflow with static checks.
 - `app/README.md` explains setup, security, known limitations and the first authenticated user test.
 
-**Important:** application code exists, but live GitHub Pages publication and real user-login/storage tests have not yet been independently confirmed. If GitHub Pages is not enabled, the repository owner must open **Settings → Pages → Build and deployment → Source → GitHub Actions**. Supabase Authentication's Site URL and Redirect URLs must then be set to the published app URL.
+**Important:** the user has confirmed that the GitHub Pages website is live and that account sign-in and project creation work. The new five-page interface and production-run UI have been committed and the database operation passed a rollback-only authenticated test, but the latest Pages deployment and a full user-driven image/video-provider run are **not** independently verified. Auth redirect settings have been configured.
 
 A saved handoff or task is a record, **not** evidence that an image or video has been generated. Actual creative tools, the public plugin interface, and a three-studio execution coordinator remain to be integrated.
 
