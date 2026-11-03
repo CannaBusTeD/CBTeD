@@ -17,11 +17,13 @@ jobs:
       - name: Check syntax of orchestration modules and backend entrypoints
         run: |
           node --check app/production.js
+          node --check supabase/functions/_shared/specialist-router.mjs
           node --check supabase/functions/_shared/production.mjs
           node --check --input-type=module < supabase/functions/cbted-orchestrator/index.ts
           node --check --input-type=module < supabase/functions/cbted-mcp/index.ts
       - name: Verify deterministic gates and existing MCP auth
         run: |
+          node --test tests/check-specialist-router.mjs
           node --test tests/check-production.mjs
           node tests/check-cbted-mcp.mjs
       - name: Verify live orchestrator and refusal of unauthorised requests
