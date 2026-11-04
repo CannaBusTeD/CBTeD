@@ -25,7 +25,7 @@ async function identity(request){
 }
 const dbHeaders=(token,write=false)=>({apikey:key(),Authorization:"Bearer "+token,"content-type":"application/json",...(write?{Prefer:"return=representation"}:{})});
 async function rest(token,table,query={}){
- const permitted=["projects","source_versions","project_rules","production_runs","production_steps","production_approvals","assets"];
+ const permitted=["projects","source_versions","project_rules","production_runs","production_steps","production_approvals","production_step_attempts","assets"];
  if(!permitted.includes(table))throw Error("Invalid table");
  const qs=new URLSearchParams(query);
  return requestJSON(ROOT+"/rest/v1/"+table+"?"+qs,dbHeaders(token));
@@ -49,11 +49,12 @@ async function requireRun(token,runId){
 }
 async function state(token,runId){
  const run=await requireRun(token,runId);
- const [steps,approvals]=await Promise.all([
+ const [steps,approvals,attempts]=await Promise.all([
    rest(token,"production_steps",{run_id:"eq."+runId,order:"sequence_index.asc",limit:"200"}),
-   rest(token,"production_approvals",{run_id:"eq."+runId,order:"created_at.asc",limit:"200"})
+   rest(token,"production_approvals",{run_id:"eq."+runId,order:"created_at.asc",limit:"200"}),
+   rest(token,"production_step_attempts",{run_id:"eq."+runId,order:"recorded_at.desc",limit:"50"})
  ]);
- return {run,steps,approvals};
+ return {run,steps,approvals,attempts};
 }
 function latestDecisions(approvals){
  const m={};for(const item of approvals)m[item.step_key]=item.decision;return m;
@@ -72,12 +73,13 @@ async function fullRulebook(studio){
  const result=await requestJSON(path,{"content-type":"application/json"},"POST",{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"cbted_get_rulebook",arguments:{studio:studio==="audio"?"core":studio==="animation"?"animation":studio}}});
  if(result.error||result.result?.isError)throw Error("Full master/studio rules unavailable");
  const payload=result.result?.structuredContent||JSON.parse(result.result?.content?.[0]?.text||"{}");
- if(!Array.isArray(payload.documents)||!payload.documents.some(d=>d.path?.includes("Master_Workflow_Rules_Universal")))throw Error("Master source missing");
+ if(!Array.isArray(payload.documents)||!payload.documents.some(d=>d.path==="core/CBTeD_Workflow.md"))throw Error("Master source missing");
  return payload.documents.map(d=>"SOURCE "+d.path+" SHA "+d.sha+"\n"+d.content).join("\n\n");
 }
 function takePrompt(s,step,rulebook,original,projectRules){
  const previous=s.steps.filter(x=>x.status==="passed").map(x=>({stage:x.step_key,text:x.output_text?.slice(0,20000)||"",asset_id:x.asset_id||null}));
- return modelInstruction(step,rulebook,projectRules,original,JSON.stringify(previous),s.run.instructions);
+ const history=(s.attempts||[]).slice(0,16).map(x=>({step:x.step_key,attempt:x.attempt_number,status:x.status,text:(x.output_text||"").slice(0,8000)}));
+  return modelInstruction(step,rulebook,projectRules,original,JSON.stringify({verified_steps:previous,previous_attempts:history}),s.run.instructions);
 }
 async function privateImageData(token,asset){
  if(!asset||!["image/png","image/jpeg","image/webp"].includes(asset.mime_type))throw Error("Unsupported private reference image");
@@ -168,7 +170,7 @@ async function executeOne(token,user,s){
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
  const isReview=["writing_reviewer","image_reviewer"].includes(chosen.agent);
- if(isReview)prompt+="\\n\\nBegin with VERDICT: PASS only if the checked content meets all hard requirements. Otherwise begin with VERDICT: REPAIR and detail the defects. Never falsely approve.";
+ if(isReview)prompt+="\\n\\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Completion of steps is not proof of quality.";
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
    :null;
@@ -182,7 +184,13 @@ async function executeOne(token,user,s){
     p_text:result.text||null,p_asset:result.asset_id||null,
     p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,check:"provider_returned_and_recorded"}
    });
-   return {executed:true,step:chosen.key,kind:chosen.kind,asset_id:result.asset_id||null,review_failed:reviewFailed};
+   if(reviewFailed&&s.run.workflow==="writing_rewrite"&&chosen.key==="writing_review"){
+      try{
+        await rpc(token,"cbted_retry_production_step",{p_run:s.run.id,p_step:chosen.key});
+        return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:true};
+      }catch(e){return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:String(e.message||e).slice(0,240)};}
+    }
+    return {executed:true,step:chosen.key,kind:chosen.kind,asset_id:result.asset_id||null,review_failed:reviewFailed};
  }catch(e){
    await rpc(token,"cbted_finish_production_step",{p_run:s.run.id,p_step:chosen.key,p_result:"failed",p_evidence:{reason:String(e.message||e).slice(0,300)}}).catch(()=>{});
    throw e;
@@ -205,6 +213,7 @@ Deno.serve(async(request)=>{
    await requireProject(user.token,body.project_id);
    const instructions=String(body.instructions||"").trim();
    if(!instructions||instructions.length>20000)throw Error("Instructions required (max 20,000 characters)");
+   if(["writing_critique","writing_suggestions","writing_line_edit","writing_rewrite"].includes(plan.workflow)&&!body.source_version_id)throw Error("Exact existing source version required");
    if(body.source_version_id){
     requiredUUID(body.source_version_id,"source version");
     const src=await rest(user.token,"source_versions",{id:"eq."+body.source_version_id,project_id:"eq."+body.project_id,limit:"1"});
