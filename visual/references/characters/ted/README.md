@@ -1,17 +1,22 @@
 # Ted — master character references (CannaBusTeD)
 
-This directory is the **artist-specific** reference set for Ted. It is not a universal Visual Studio default for other characters.
+The **three original user-supplied photographs** in this directory are the authoritative Ted identity references for CBTeD creative projects. These are character-specific, not Visual Studio defaults for other artists.
 
-## Source images
+## Images
 
-1. `ted-master-01-multi-angle-wardrobe.jpg` — six photographs with front, side, back and face views. Use to reconstruct Ted's face, long grey beard, dark wavy hair, dark fedora, round red lenses, build and arm tattoos. Skull-patterned shirt and the white mask are specific to those photographs, not mandatory for other scenes.
-2. `ted-master-02-face-identity-sheet.jpg` — clear facial/eyewear/beard identity studies. Different glasses and clothing across captures are alternatives, not contradictory identity constraints.
-3. `ted-master-03-black-shirt-full-body.jpg` — clear black collared shirt and black trouser outfit reference with hat, red-tinted glasses, beard and build. Text in the photograph's background is not part of the character design.
+1. **[Multi-angle wardrobe sheet](ted-master-01-multi-angle-wardrobe.jpg)**: six views showing face, side, back, beard, hair, black fedora, red-tinted glasses and build. The skull-patterned shirt, tattoos and white theatrical mask shown in this sheet are image-specific wardrobe/prop details, not automatic requirements for every scene.
+2. **[Face identity sheet](ted-master-02-face-identity-sheet.jpg)**: multiple facial captures for the beard's shape and length, face, eyewear, hat and hair. Clothing and glasses vary across the photos.
+3. **[Black-shirt full-body](ted-master-03-black-shirt-full-body.jpg)**: full-body black collared shirt, black trousers, fedora, red-tinted glasses and long grey beard. The background thank-you message belongs to that photograph and is not character branding.
 
-**Continuity:** Reconstruct Ted directly from actual photos. His stable features are his recognisable face, black fedora, red-tinted glasses where specified, very long grey beard, dark hair and natural adult proportions. Wardrobe and props follow the current song/scene. No cannabis, marijuana or drug symbolism is implied by the CannaBusTeD name.
+## How to use
 
-**Storage:** The master photo set belongs in the private Supabase bucket `cbted-project-assets` at `master-characters/ted/`. Their intended GitHub locations are this directory. The CBTeD master character catalogue is project `4e3be446-0f25-47bd-800f-443afc66eb54`.
+Reconstruct the same recognisable man from the supplied images. His recurring character identity includes the fedora, very long tapered grey beard, dark hair, red-tinted glasses where the project establishes them, and realistic human anatomy. Scene-specific clothes and props follow the active lyrics, script and approved references. The name CannaBusTeD does not imply cannabis or drug imagery.
 
-**Upload status:** The metadata has been registered, but the three JPEG image binaries have NOT been uploaded to Supabase or GitHub through the current connector. This text is only the manifest/continuity specification, not proof of remote storage. Do not mark assets verified until the image files can actually be retrieved and their SHA-256 hashes match the manifest.
+## Verified storage
 
-The GitHub repository is **public**. Uploading the actual photographs here will make them publicly accessible; Supabase bucket access is private.
+- **GitHub:** The three .jpg files here contain the exact original image bytes, with Git blob SHA-1 matches verified against the user's local copies.
+- **Supabase:** All three are in the **private** `cbted-project-assets` bucket, under the user/project-scoped `references/ted/` directory. Image bytes were read back and SHA-256 verified. Paths are stored in the owner-protected CBTeD database.
+- **CBTeD master character project:** `4e3be446-0f25-47bd-800f-443afc66eb54`. Three assets are registered and the authenticated signed-link tool successfully issued private read links for all three.
+- **Integrity:** [manifest.json](manifest.json) records the original filenames, byte sizes, dimensions and SHA-256 hashes.
+
+The **GitHub repository is public**, so its three photograph files can be viewed by anyone. The Supabase Storage bucket remains private; the application generates short-lived owner-authenticated links.
