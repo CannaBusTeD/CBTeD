@@ -1,6 +1,9 @@
 // CBTeD intent-based specialist router. No generation or database mutations.
 export const ROUTES=Object.freeze({
- editorial:{studio:"writing",agents:["writing_critic","writing_editor","language_auditor","writing_proofreader","writing_reviewer"]},
+ editorial:{studio:"writing",agents:["writing_critic","language_auditor","writing_editor","writing_synthesizer","writing_critic","language_auditor","writing_proofreader","writing_reviewer"]},
+ suggestions:{studio:"writing",agents:["writing_critic","language_auditor","writing_editor"]},
+ line_edit:{studio:"writing",agents:["writing_editor","language_auditor","writing_reviewer"]},
+ rewrite:{studio:"writing",agents:["writing_critic","language_auditor","writing_editor","writing_synthesizer","writing_critic","language_auditor","writing_proofreader","writing_reviewer"]},
  critique:{studio:"writing",agents:["writing_critic","language_auditor"]},
  new_song:{studio:"writing",agents:["writing_author","writing_critic","writing_editor","language_auditor","writing_synthesizer","writing_proofreader","writing_reviewer"]},
  verse:{studio:"writing",agents:["writing_author","writing_critic","language_auditor","writing_proofreader"]},
@@ -15,7 +18,7 @@ export function routeTask({intent,source_kind,has_existing_source=false,has_imag
  if(!(mode in ROUTES))throw Error("Unknown CBTeD task intent; clarify before proceeding");
  if(!Number.isInteger(image_count)||image_count<1||image_count>20)throw Error("Image count must be one to twenty");
  if(!Number.isInteger(video_count)||video_count<1||video_count>20)throw Error("Video count must be one to twenty");
- if(["editorial","critique","video_from_assets"].includes(mode)&&!has_existing_source)throw Error("Existing source is required for this task");
+ if(["editorial","rewrite","suggestions","critique","line_edit","video_from_assets"].includes(mode)&&!has_existing_source)throw Error("Existing source is required for this task");
  if(mode==="video_from_assets"&&!has_image)throw Error("An existing image is required for image-to-video");
  const stages=[];
  const add=(agent,studio,output=1)=>stages.push({agent,studio,output});

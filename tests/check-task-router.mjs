@@ -34,3 +34,23 @@ test("combined production explicitly activates all participating studios",()=>{
  const p=routeTask({intent:"complete",image_count:2,video_count:2});
  assert.deepEqual(p.studios,["writing","visual","audio","animation"]);
 });
+
+test("critique and suggestions stop before any wholesale rewrite",()=>{
+ for(const mode of ["critique","suggestions"]){
+   const p=routeTask({intent:mode,has_existing_source:true});
+   assert.deepEqual(p.studios,["writing"]);
+   assert.ok(!p.stages.some(s=>s.agent==="writing_author"||s.agent==="writing_synthesizer"));
+ }
+});
+test("full rewrite includes independent re-critique and no irrelevant studios",()=>{
+ const p=routeTask({intent:"rewrite",has_existing_source:true});
+ const agents=p.stages.map(s=>s.agent);
+ assert.deepEqual(p.studios,["writing"]);
+ assert.ok(agents.indexOf("writing_synthesizer")>=0);
+ assert.ok(agents.lastIndexOf("writing_critic")>agents.indexOf("writing_synthesizer"));
+});
+test("line-edit request never becomes song generation",()=>{
+ const p=routeTask({intent:"line_edit",has_existing_source:true});
+ assert.deepEqual(p.studios,["writing"]);
+ assert.ok(!p.stages.some(s=>s.agent==="writing_synthesizer"||s.agent==="writing_author"));
+});

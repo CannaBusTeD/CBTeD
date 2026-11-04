@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-const source = readFileSync(new URL("../supabase/functions/cbted-mcp/index.ts", import.meta.url), "utf8");
+const root = "../supabase/functions/cbted-mcp/";
+const moduleText=readFileSync(new URL(root+"index.ts",import.meta.url),"utf8");
+const docs=Array.from({length:9},(_,i)=>{
+ const text=readFileSync(new URL(root+"rule-"+(i+1)+".ts",import.meta.url),"utf8");
+ return JSON.parse(text.replace(/^export const document = /,"").trim().replace(/;$/,""));
+});
+const rulebook=Object.fromEntries(docs.map(x=>[x.path,{sha:x.sha,content:x.content}]));
+const source=moduleText.replace('import {RULEBOOK} from "./rulebook.ts";',"const RULEBOOK = "+JSON.stringify(rulebook)+";");
 assert.match(source, /CBTeD ChatGPT MCP bridge/);
 const projectRef = "dmzzyfiwtosxtyekpbfi";
 const base = "https://" + projectRef + ".supabase.co/functions/v1/cbted-mcp";
@@ -41,7 +48,7 @@ const rpc=async(method,params={},auth=false)=>{
 };
 const health=await (await handler(new Request(base))).json();
 assert.equal(health.status,"online");
-assert.equal(health.rule_documents,13);
+assert.equal(health.rule_documents,9);
 const meta=await(await handler(new Request(base+"/.well-known/oauth-protected-resource"))).json();
 assert.equal(meta.resource,base);
 assert.equal(meta.authorization_servers[0],"https://"+projectRef+".supabase.co/auth/v1");
@@ -50,7 +57,7 @@ assert.equal(init.result.serverInfo.name,"CBTeD");
 const list=await rpc("tools/list");
 assert.ok(list.result.tools.length>=12,"Expected full CBTeD studio/project tools");
 const names=list.result.tools.map(t=>t.name);
-for(const expected of ["cbted_get_rulebook","cbted_list_projects","cbted_get_project_context","cbted_create_task","cbted_record_output","cbted_get_asset_link"]){
+for(const expected of ["cbted_get_rulebook","cbted_list_projects","cbted_get_project_context","cbted_route_task","cbted_plan_production","cbted_get_asset_link"]){
   assert.ok(names.includes(expected),expected+" missing");
 }
 assert.ok(list.result.tools.find(t=>t.name==="cbted_get_rulebook").securitySchemes.some(s=>s.type==="noauth"));
@@ -58,18 +65,18 @@ assert.ok(list.result.tools.find(t=>t.name==="cbted_list_projects").securitySche
 const rules=await rpc("tools/call",{name:"cbted_get_rulebook",arguments:{studio:"visual"}});
 assert.equal(rules.result.isError,false);
 const payload=JSON.parse(rules.result.content[0].text);
-assert.equal(payload.documents.length,5);
-assert.match(payload.documents[0].content,/HARD RULE 1/);
+assert.equal(payload.documents.length,4);
+assert.match(payload.documents[0].content,/Source first/);
 assert.match(payload.documents[2].content,/Visual/);
 const writingRules=await rpc("tools/call",{name:"cbted_get_rulebook",arguments:{studio:"writing"}});
 assert.equal(writingRules.result.isError,false);
 const lyricPayload=JSON.parse(writingRules.result.content[0].text);
-assert.equal(lyricPayload.documents.length,7,"Writing instructions must include the dedicated lyric gate");
-const gate=lyricPayload.documents.find(d=>d.path==="writing/Lyric_Post_Draft_Editorial_Gate.md");
+assert.equal(lyricPayload.documents.length,3,"Writing rules must load core, writing and lyric master");
+const gate=lyricPayload.documents.find(d=>d.path==="writing/Writing_Studio.md");
 assert.ok(gate,"Dedicated editorial gate must be present");
-for(const phase of ["BRUTAL CRITIQUE","RECOMMENDATIONS","REWRITE"]){assert.ok(gate.content.includes(phase),"Missing required editorial stage: "+phase);}
-assert.ok(gate.content.indexOf("BRUTAL CRITIQUE")<gate.content.indexOf("RECOMMENDATIONS"));
-assert.ok(gate.content.indexOf("RECOMMENDATIONS")<gate.content.indexOf("REWRITE"));
+for(const phase of ["Critique.","Recommendations.","Rewrite.","Re-critique"]){assert.ok(gate.content.includes(phase),"Missing required stage: "+phase);}
+assert.ok(gate.content.indexOf("Critique.")<gate.content.indexOf("Recommendations."));
+assert.ok(gate.content.indexOf("Recommendations.")<gate.content.indexOf("Rewrite."));
 assert.equal(networkCalls,0,"Reading public bundled rules must not access private APIs");
 const blocked=await rpc("tools/call",{name:"cbted_list_projects",arguments:{}});
 assert.equal(blocked.result.isError,true);
@@ -83,3 +90,12 @@ assert.ok(networkCalls>=2,"Authenticated call verifies the user then reads with 
 const notification=await handler(new Request(base,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized"})}));
 assert.equal(notification.status,202);
 console.log("CBTeD MCP protocol/auth/rules smoke tests passed ("+list.result.tools.length+" tools).");
+
+assert.ok(!names.includes("cbted_create_task")&&!names.includes("cbted_record_output"),"Legacy task APIs must not bypass the production controller");
+for(const mode of ["critique","suggestions","rewrite"]){
+ const response=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:mode,has_existing_source:true}});
+ const result=JSON.parse(response.result.content[0].text);
+ assert.equal(result.studios.length,1);
+ assert.equal(result.studios[0],"writing");
+ if(mode!=="rewrite")assert.ok(!result.stages.some(x=>x.agent==="writing_synthesizer"));
+}
