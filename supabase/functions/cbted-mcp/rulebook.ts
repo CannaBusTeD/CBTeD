@@ -1,0 +1,10 @@
+import {document as d1} from "./rule-1.ts";
+import {document as d2} from "./rule-2.ts";
+import {document as d3} from "./rule-3.ts";
+import {document as d4} from "./rule-4.ts";
+import {document as d5} from "./rule-5.ts";
+import {document as d6} from "./rule-6.ts";
+import {document as d7} from "./rule-7.ts";
+import {document as d8} from "./rule-8.ts";
+import {document as d9} from "./rule-9.ts";
+export const RULEBOOK = Object.fromEntries([d1,d2,d3,d4,d5,d6,d7,d8,d9].map(x=>[x.path,{sha:x.sha,content:x.content}]));
