@@ -67,7 +67,7 @@ assert.equal(rules.result.isError,false);
 const payload=JSON.parse(rules.result.content[0].text);
 assert.equal(payload.documents.length,4);
 assert.match(payload.documents[0].content,/Source first/);
-assert.match(payload.documents[2].content,/Visual/);
+assert.match(payload.documents[2].content,/Image Generation Workflow/);
 const writingRules=await rpc("tools/call",{name:"cbted_get_rulebook",arguments:{studio:"writing"}});
 assert.equal(writingRules.result.isError,false);
 const lyricPayload=JSON.parse(writingRules.result.content[0].text);
