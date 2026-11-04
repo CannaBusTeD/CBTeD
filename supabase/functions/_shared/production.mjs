@@ -6,7 +6,7 @@ export const AGENTS = Object.freeze({
   writing_editor:{studio:"writing",role:"Propose precise edits without altering the authoritative source.",kind:"text"},
   language_auditor:{studio:"writing",role:"Spot formulaic AI-style phrasing, repetitive patterns and clichés. Never claim authorship detection is conclusive.",kind:"text"},
   writing_synthesizer:{studio:"writing",role:"Rewrite using the draft, criticism, editorial suggestions and current user corrections.",kind:"text"},
-  writing_proofreader:{studio:"writing",role:"Check spelling, British usage, sung cadence, consistency and source fidelity.",kind:"text"},
+  writing_proofreader:{studio:"writing",role:"Check spelling, culturally neutral diction, sung cadence, consistency and source fidelity.",kind:"text"},
   writing_reviewer:{studio:"writing",role:"Check all prior stages against the actual source and master workflow before handoff.",kind:"text"},
   audio_director:{studio:"audio",role:"Create a musically coherent arrangement and production specification.",kind:"text"},
   audio_tool_selector:{studio:"audio",role:"Select eligible, currently configured music tools; do not invent availability.",kind:"text"},
@@ -25,7 +25,7 @@ export const AGENTS = Object.freeze({
   sequence_assembler:{studio:"animation",role:"Assemble verified clips and audio into a final sequence.",kind:"video"},
   release_auditor:{studio:"core",role:"Check final source, verified outputs, rules and complete delivery.",kind:"text"}
 });
-const allowed = new Set(["writing","visual","animation","song_video","plan_only"]);
+const allowed = new Set(["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","plan_only"]);
 export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={}){
   if(!allowed.has(workflow))throw Error("Unknown workflow");
   if(!["plan","execute"].includes(intent))throw Error("Intent must be plan or execute");
@@ -42,6 +42,15 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     return key;
   }
   let writingLast=null;
+  if(["writing_critique","writing_suggestions","writing_line_edit","writing_rewrite"].includes(workflow)){
+    const selection={
+      writing_critique:[["writing_critique","writing_critic"],["writing_language_audit","language_auditor"],["writing_review","writing_reviewer"]],
+      writing_suggestions:[["writing_critique","writing_critic"],["writing_language_audit","language_auditor"],["writing_edit","writing_editor"],["writing_review","writing_reviewer"]],
+      writing_line_edit:[["writing_edit","writing_editor"],["writing_language_audit","language_auditor"],["writing_review","writing_reviewer"]],
+      writing_rewrite:[["writing_critique","writing_critic"],["writing_edit","writing_editor"],["writing_language_audit","language_auditor"],["writing_rewrite","writing_synthesizer"],["writing_proofread","writing_proofreader"],["writing_review","writing_reviewer"]]
+    }[workflow];
+    for(const [key,agent] of selection)writingLast=add(key,agent,writingLast?[writingLast]:[]);
+  }
   if(["writing","song_video"].includes(workflow)){
     writingLast=add("writing_draft","writing_author");
     writingLast=add("writing_critique","writing_critic",[writingLast]);
