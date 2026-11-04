@@ -25,7 +25,7 @@ This file is operational. It governs the step-by-step image-production procedure
 Before performing any image task, Visual Studio must retrieve and apply all relevant layers:
 
 ### Universal workflow
-- `core/Master_Workflow_Rules_Universal_Creative_Execution.txt`
+- `core/CBTeD_Workflow.md`
 - `core/CBTeD_Core.md`
 
 ### Visual rules

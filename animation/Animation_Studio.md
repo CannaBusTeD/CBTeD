@@ -5,7 +5,7 @@ Status: Platform-neutral specialist studio and operational specification; not ye
 
 ## Governing layers
 
-1. **Universal execution rules:** `core/Master_Workflow_Rules_Universal_Creative_Execution.txt`. These govern the method, sequential actions, checking, correction, and completion.
+1. **Universal execution rules:** `core/CBTeD_Workflow.md`. These govern the method, sequential actions, checking, correction, and completion.
 2. **Image-to-video prompting rules:** `animation/sources/Image_to_Video_Prompt_Master_Guide.md`. These govern how to write motion prompts across image-to-video tools.
 3. **Original reference archive:** `animation/sources/Original_Image_to_Video_Guide_Archive.txt`. This is a verbatim extracted copy of the user's original three-page source, kept for provenance. Some claims in it concern the platform used when it was written; do not promote those into universal technical guarantees.
 4. **Project source:** approved input image, source lyrics/story/script, previous clip or final frame, project continuity, user corrections, exact output requirements.

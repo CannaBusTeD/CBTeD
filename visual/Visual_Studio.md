@@ -14,7 +14,7 @@ Visual Studio is designed for all users and projects. It must **not** impose any
 ## 2. Governing documents: keep the layers separate
 
 **Universal process, mandatory for all operations:**
-- `core/Master_Workflow_Rules_Universal_Creative_Execution.txt`
+- `core/CBTeD_Workflow.md`
 
 **Visual craft and image-production procedure, mandatory for image tasks:**
 - `visual/sources/Image_Generation_Workflow.md`
