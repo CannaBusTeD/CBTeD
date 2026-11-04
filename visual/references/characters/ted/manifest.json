@@ -1,7 +1,7 @@
 {
   "character": "Ted",
   "artist": "CannaBusTeD",
-  "manifest_version": 1,
+  "manifest_version": 2,
   "registered_on": "2026-11-04",
   "cbted_master_project_id": "4e3be446-0f25-47bd-800f-443afc66eb54",
   "visibility": {
@@ -21,10 +21,11 @@
       "role": "multi-angle identity and patterned shirt reference",
       "mime_type": "image/jpeg",
       "supabase_bucket": "cbted-project-assets",
-      "supabase_path": "master-characters/ted/ted-master-01-multi-angle-wardrobe.jpg",
       "github_path": "visual/references/characters/ted/ted-master-01-multi-angle-wardrobe.jpg",
-      "binary_upload_status": "pending",
-      "verified": false
+      "binary_upload_status": "verified",
+      "verified": true,
+      "supabase_path_template": "{owner_id}/{project_id}/references/ted/ted-master-01-multi-angle-wardrobe.jpg",
+      "cbted_asset_id": "66373a19-3718-4b46-992c-c9bdaa291c0c"
     },
     {
       "source_filename": "1000190146.jpg",
@@ -36,10 +37,11 @@
       "role": "face identity and beard reference",
       "mime_type": "image/jpeg",
       "supabase_bucket": "cbted-project-assets",
-      "supabase_path": "master-characters/ted/ted-master-02-face-identity-sheet.jpg",
       "github_path": "visual/references/characters/ted/ted-master-02-face-identity-sheet.jpg",
-      "binary_upload_status": "pending",
-      "verified": false
+      "binary_upload_status": "verified",
+      "verified": true,
+      "supabase_path_template": "{owner_id}/{project_id}/references/ted/ted-master-02-face-identity-sheet.jpg",
+      "cbted_asset_id": "48dec87c-fff8-4a47-893d-a98926d0c3a7"
     },
     {
       "source_filename": "1000185304.png",
@@ -51,10 +53,12 @@
       "role": "black shirt full-body wardrobe reference",
       "mime_type": "image/jpeg",
       "supabase_bucket": "cbted-project-assets",
-      "supabase_path": "master-characters/ted/ted-master-03-black-shirt-full-body.jpg",
       "github_path": "visual/references/characters/ted/ted-master-03-black-shirt-full-body.jpg",
-      "binary_upload_status": "pending",
-      "verified": false
+      "binary_upload_status": "verified",
+      "verified": true,
+      "supabase_path_template": "{owner_id}/{project_id}/references/ted/ted-master-03-black-shirt-full-body.jpg",
+      "cbted_asset_id": "e7cc9820-8f23-4e2e-9cf0-40f9c4ba9929"
     }
-  ]
+  ],
+  "storage_verification": "all three GitHub image blobs match original file byte hashes; Supabase private Storage upload/readback SHA-256 verified; CBTeD signed links issued for all three assets"
 }
