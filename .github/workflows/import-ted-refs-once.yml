@@ -1,0 +1,23 @@
+name: One-time import Ted master references to private Supabase Storage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/import-ted-refs-once.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy three hash-verified Ted JPEGs from this repository into private Supabase storage
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --show-error --silent --retry 2 --max-time 90 \
+            --request POST \
+            "https://dmzzyfiwtosxtyekpbfi.supabase.co/functions/v1/cbted-import-ted-refs" \
+            | tee /tmp/ted-import-result.json
+          node -e 'const f=require("fs");const x=JSON.parse(f.readFileSync("/tmp/ted-import-result.json","utf8"));if(!x.all_verified||x.results.length!==3) process.exit(1);'
