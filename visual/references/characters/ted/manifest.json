@@ -1,0 +1,60 @@
+{
+  "character": "Ted",
+  "artist": "CannaBusTeD",
+  "manifest_version": 1,
+  "registered_on": "2026-11-04",
+  "cbted_master_project_id": "4e3be446-0f25-47bd-800f-443afc66eb54",
+  "visibility": {
+    "github_repository": "public",
+    "supabase_bucket": "private"
+  },
+  "asset_count": 3,
+  "description": "Master identity references scoped to Ted, not universal visual styles. Source bytes are user-supplied JPEG files (two arrived with incorrect .png extensions).",
+  "images": [
+    {
+      "source_filename": "1000191521.png",
+      "filename": "ted-master-01-multi-angle-wardrobe.jpg",
+      "width": 864,
+      "height": 1536,
+      "bytes": 284913,
+      "sha256": "af9263b649a4920d9aee1fdaafbaece59b3223428acfc542ef00aec87dbfa475",
+      "role": "multi-angle identity and patterned shirt reference",
+      "mime_type": "image/jpeg",
+      "supabase_bucket": "cbted-project-assets",
+      "supabase_path": "master-characters/ted/ted-master-01-multi-angle-wardrobe.jpg",
+      "github_path": "visual/references/characters/ted/ted-master-01-multi-angle-wardrobe.jpg",
+      "binary_upload_status": "pending",
+      "verified": false
+    },
+    {
+      "source_filename": "1000190146.jpg",
+      "filename": "ted-master-02-face-identity-sheet.jpg",
+      "width": 1536,
+      "height": 1014,
+      "bytes": 224951,
+      "sha256": "baa885ba80cf23b03c63f55016e84a6abcc1d5bd18032808f250bc5a363c3814",
+      "role": "face identity and beard reference",
+      "mime_type": "image/jpeg",
+      "supabase_bucket": "cbted-project-assets",
+      "supabase_path": "master-characters/ted/ted-master-02-face-identity-sheet.jpg",
+      "github_path": "visual/references/characters/ted/ted-master-02-face-identity-sheet.jpg",
+      "binary_upload_status": "pending",
+      "verified": false
+    },
+    {
+      "source_filename": "1000185304.png",
+      "filename": "ted-master-03-black-shirt-full-body.jpg",
+      "width": 864,
+      "height": 1536,
+      "bytes": 261250,
+      "sha256": "4b9e1e03ac38f37795d73f3fffd64fee63c71e00777f3ab70b2be43eb7b2eb67",
+      "role": "black shirt full-body wardrobe reference",
+      "mime_type": "image/jpeg",
+      "supabase_bucket": "cbted-project-assets",
+      "supabase_path": "master-characters/ted/ted-master-03-black-shirt-full-body.jpg",
+      "github_path": "visual/references/characters/ted/ted-master-03-black-shirt-full-body.jpg",
+      "binary_upload_status": "pending",
+      "verified": false
+    }
+  ]
+}
