@@ -99,3 +99,10 @@ for(const mode of ["critique","suggestions","rewrite"]){
  assert.equal(result.studios[0],"writing");
  if(mode!=="rewrite")assert.ok(!result.stages.some(x=>x.agent==="writing_synthesizer"));
 }
+
+const prodTool=list.result.tools.find(t=>t.name==="cbted_plan_production");
+for(const mode of ["writing_critique","writing_suggestions","writing_line_edit","writing_rewrite"]){
+ assert.ok(prodTool.inputSchema.properties.workflow.enum.includes(mode),"MCP must expose workflow "+mode);
+}
+assert.ok(lyricPayload.documents.some(d=>d.path==="writing/Lyric_Master.md"));
+assert.match(gate.content,/client explicitly asks for a full rewrite/);

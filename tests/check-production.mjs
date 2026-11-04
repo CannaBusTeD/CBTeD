@@ -38,3 +38,31 @@ test("agents never infer AI authorship and instructions carry source",()=>{
  assert.match(prompt,/MY ORIGINAL/);
  assert.match(prompt,/Do ONLY the task/);
 });
+
+test("each existing-song writing intent has a sealed independent production plan",()=>{
+ const expected={
+  writing_critique:["writing_critic","language_auditor","writing_reviewer"],
+  writing_suggestions:["writing_critic","language_auditor","writing_editor","writing_reviewer"],
+  writing_line_edit:["writing_editor","language_auditor","writing_reviewer"],
+  writing_rewrite:["writing_critic","writing_editor","language_auditor","writing_synthesizer","writing_proofreader","writing_reviewer"]
+ };
+ for(const [workflow,agents] of Object.entries(expected)){
+  const plan=buildPlan({workflow,intent:"execute"});
+  assert.deepEqual(plan.steps.map(x=>x.agent),agents);
+  assert.ok(plan.steps.every(x=>x.studio==="writing"&&x.kind==="text"));
+  assert.ok(plan.steps.every((x,i)=>i===0?x.depends_on.length===0:x.depends_on.includes(plan.steps[i-1].key)));
+ }
+});
+test("critique and suggestions never generate or rewrite full lyrics",()=>{
+ for(const workflow of ["writing_critique","writing_suggestions"]){
+  const agents=buildPlan({workflow}).steps.map(x=>x.agent);
+  assert.ok(!agents.includes("writing_synthesizer"));
+  assert.ok(!agents.includes("writing_author"));
+ }
+});
+test("full editorial rewriting ends with independent reviewer, not an automatic PASS",()=>{
+ const plan=buildPlan({workflow:"writing_rewrite",intent:"execute"});
+ const last=plan.steps.at(-1);
+ assert.equal(last.agent,"writing_reviewer");
+ assert.equal(authorisation({plan,step_key:last.key}).allowed,false);
+});
