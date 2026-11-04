@@ -93,7 +93,7 @@ console.log("CBTeD MCP protocol/auth/rules smoke tests passed ("+list.result.too
 
 assert.ok(!names.includes("cbted_create_task")&&!names.includes("cbted_record_output"),"Legacy task APIs must not bypass the production controller");
 for(const mode of ["critique","suggestions","rewrite"]){
- const response=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:mode,has_existing_source:true}});
+ const response=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:mode,has_existing_source:true}},true);
  const result=JSON.parse(response.result.content[0].text);
  assert.equal(result.studios.length,1);
  assert.equal(result.studios[0],"writing");
