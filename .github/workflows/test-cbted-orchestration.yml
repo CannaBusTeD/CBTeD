@@ -20,6 +20,7 @@ jobs:
           node --check supabase/functions/_shared/production.mjs
           node --check --input-type=module < supabase/functions/cbted-orchestrator/index.ts
           node --check --input-type=module < supabase/functions/cbted-mcp/index.ts
+          node --check --input-type=module < supabase/functions/cbted-external-review/index.ts
       - name: Verify deterministic gates and existing MCP auth
         run: |
           node --test tests/check-production.mjs
