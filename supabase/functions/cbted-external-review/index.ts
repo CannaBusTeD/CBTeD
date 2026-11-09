@@ -45,6 +45,25 @@ async function guest(req){
  if(!r||!["approved","inviting","in_review"].includes(r.status))throw Error("INVALID_INVITATION");
  return {i,r};
 }
+
+async function previewAsset(r){
+ if(!r.output_id)return null;
+ const outputs=await api("outputs?id=eq."+r.output_id+"&project_id=eq."+r.project_id+"&select=asset_id");
+ const assetId=outputs?.[0]?.asset_id;
+ if(!check(assetId))return null;
+ const assets=await api("assets?id=eq."+assetId+"&project_id=eq."+r.project_id+"&select=storage_path,mime_type");
+ const asset=assets?.[0];
+ if(!asset?.storage_path)return null;
+ const path=asset.storage_path.split("/").map(encodeURIComponent).join("/");
+ const res=await fetch(ROOT+"/storage/v1/object/sign/cbted-project-assets/"+path,{
+  method:"POST",headers:{apikey:SECRET,Authorization:"Bearer "+SECRET,"content-type":"application/json"},
+  body:JSON.stringify({expiresIn:120})});
+ if(!res.ok)throw Error("Cannot prepare private asset preview");
+ const data=await res.json();
+ const relative=data.signedURL||data.signedUrl;
+ if(typeof relative!=="string")throw Error("Storage did not return a signed asset URL");
+ return {mime_type:asset.mime_type,temporary_url:relative.startsWith("http")?relative:ROOT+"/storage/v1"+(relative.startsWith("/")?relative:"/"+relative),expires_in_seconds:120};
+}
 Deno.serve(async req=>{
  if(req.method==="OPTIONS")return response({});
  if(req.method!=="POST")return response({error:"POST required"},405);
@@ -54,7 +73,7 @@ Deno.serve(async req=>{
   const action=body?.action;
   if(action==="reviewer_get"){
    const {i,r}=await guest(req);
-   return response({review_id:r.id,brief:r.brief,package:r.review_package,expires_at:i.expires_at});
+   return response({review_id:r.id,brief:r.brief,package:r.review_package,asset:await previewAsset(r),expires_at:i.expires_at});
   }
   if(action==="reviewer_submit"){
    const {i,r}=await guest(req);
@@ -68,6 +87,26 @@ Deno.serve(async req=>{
    return response({received:true});
   }
   const user=await identity(req);
+
+  if(action==="reviewers"){
+   const reviewers=await api("reviewers?owner_id=eq."+user+"&select=id,display_name,provider,external_agent_id,verified,verification_note,created_at&order=created_at.desc&limit=100");
+   return response({reviewers});
+  }
+  if(action==="reviewer_add"){
+   const display_name=String(body.display_name||"").trim();
+   const provider=String(body.provider||"direct").trim().toLowerCase();
+   const external_agent_id=String(body.external_agent_id||"").trim();
+   if(display_name.length<1||display_name.length>120||external_agent_id.length>250||!["1f916","direct","other"].includes(provider))throw Error("Invalid reviewer details");
+   const rows=await api("reviewers","POST",{owner_id:user,display_name,provider,external_agent_id:external_agent_id||null,verified:false});
+   return response({reviewer:rows[0],note:"Pending reviewer. Confirm identity and willingness through a trusted channel before authorising access."});
+  }
+  if(action==="reviewer_approve"){
+   if(body.confirmed_consent!==true||!check(body.reviewer_id))throw Error("Explicit owner confirmation of independent reviewer consent is required");
+   const rows=await api("reviewers?id=eq."+body.reviewer_id+"&owner_id=eq."+user+"&select=id");
+   if(!rows?.length)throw Error("Reviewer not owned or missing");
+   await api("reviewers?id=eq."+body.reviewer_id,"PATCH",{verified:true,verification_note:"Owner attests out-of-band consent; not cryptographically verified"});
+   return response({approved:true,identity_cryptographically_verified:false});
+  }
   if(action==="create"){
    await owner(body.project_id,user);
    if(!check(body.output_id))throw Error("Select a finished output");
@@ -93,7 +132,7 @@ Deno.serve(async req=>{
    if(!["approved","inviting","in_review"].includes(r.status))throw Error("Review needs approval");
    const reviewerId=body.reviewer_id;
    if(!check(reviewerId))throw Error("Invalid reviewer ID");
-   const reviewer=await api("reviewers?id=eq."+reviewerId+"&verified=eq.true&select=id");
+   const reviewer=await api("reviewers?id=eq."+reviewerId+"&owner_id=eq."+user+"&verified=eq.true&select=id");
    if(!reviewer?.length)throw Error("Reviewer is not verified");
    const token=[...crypto.getRandomValues(new Uint8Array(32))].map(x=>x.toString(16).padStart(2,"0")).join("");
    const expires=new Date(Date.now()+Math.min(24,Math.max(1,Number(body.hours)||24))*3600000).toISOString();
