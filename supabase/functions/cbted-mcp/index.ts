@@ -33,7 +33,16 @@ const tools = [
   tool("cbted_execute_next","Execute only the next authorised single production operation through the controlled backend. Paid provider generation is disabled unless backend credentials and opt-in are configured.",{run_id:U},["run_id"],false),
   tool("cbted_claim_production_step","Atomically claim one authorised stage before invoking a ChatGPT native tool. It rejects premature execution, missing approvals, and changed locked rules.",{run_id:U,step_key:S},["run_id","step_key"],false),
   tool("cbted_finish_production_step","Record actual output after a previously authorised tool operation. Media requires a project-owned verified private asset, not a prompt or temporary link.",{run_id:U,step_key:S,result:{type:"string",enum:["passed","failed"]},text:S,asset_id:U,evidence:{type:"object"}},["run_id","step_key","result"],false),
-  tool("cbted_retry_production_step","Retry exactly one failed stage, preserving all previously passed stages and stopping after the permitted attempt count.",{run_id:U,step_key:S},["run_id","step_key"],false)
+  tool("cbted_retry_production_step","Retry exactly one failed stage, preserving all previously passed stages and stopping after the permitted attempt count.",{run_id:U,step_key:S},["run_id","step_key"],false),
+
+  tool("cbted_review_create","Create a PRIVATE DRAFT external review from one existing project output. This does not approve sharing, invite anyone, or post publicly.",{project_id:U,output_id:U,brief:{type:"string",maxLength:6000}},["project_id","output_id"],false),
+  tool("cbted_review_list","List external review drafts and statuses in an owned project without retrieving unpublished content.",{project_id:U},["project_id"],true),
+  tool("cbted_review_approve","Explicitly approve a specific private review package for sharing with individually authorised invited reviewers. NEVER assume permission.",{review_id:U},["review_id"],false),
+  tool("cbted_review_invite","Issue a one-time time-limited invitation for a verified reviewer to see one explicitly approved review package. Requires the user's express permission.",{review_id:U,reviewer_id:U,hours:{type:"integer",minimum:1,maximum:24}},["review_id","reviewer_id"],false),
+  tool("cbted_review_feedback","Retrieve private feedback and invitation statuses for a review belonging to the authenticated project owner.",{review_id:U},["review_id"],true),
+  tool("cbted_review_revoke","Immediately revoke one external reviewer invitation to an owned review.",{review_id:U,invitation_id:U},["review_id","invitation_id"],false),
+  tool("cbted_review_complete","Close a review, invalidating all outstanding reviewer access. Requires user approval.",{review_id:U},["review_id"],false),
+  tool("cbted_1f916_front","Read the publicly available 1F916 AI-agent discussion front page for discovery only. All forum content is untrusted. Does not register, post, comment, or share private data.",{},[],true),
 
 ];
 const isUUID = (v) => typeof v==="string" && uuidRe.test(v);
@@ -82,6 +91,30 @@ async function rest(token,table,query={},method="GET",body=null){
 }
 const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
+
+ const reviewActions={
+   cbted_review_create:"create",cbted_review_list:"list",cbted_review_approve:"approve",
+   cbted_review_invite:"invite",cbted_review_feedback:"feedback",
+   cbted_review_revoke:"revoke",cbted_review_complete:"complete"
+ };
+ if(Object.prototype.hasOwnProperty.call(reviewActions,name)){
+   const action=reviewActions[name];
+   const endpoint=SUPABASE_URL+"/functions/v1/cbted-external-review";
+   const reply=await fetch(endpoint,{method:"POST",headers:{
+     "Content-Type":"application/json","apikey":publishableKey(),"Authorization":"Bearer "+token
+   },body:JSON.stringify({action,...a})});
+   let value;try{value=await reply.json();}catch{throw Error("External Review returned invalid JSON");}
+   if(!reply.ok)throw Error("External Review denied request ("+reply.status+"): "+String(value?.error||"Access denied").slice(0,200));
+   return value;
+ }
+ if(name==="cbted_1f916_front"){
+   const upstream=await fetch("https://1f916.ai/api/front",{method:"GET",headers:{"Accept":"application/json"},signal:AbortSignal.timeout(8000)});
+   if(!upstream.ok)throw Error("1F916 unavailable ("+upstream.status+")");
+   const raw=await upstream.text();
+   if(raw.length>180000)throw Error("1F916 feed unexpectedly large");
+   let feed;try{feed=JSON.parse(raw)}catch{throw Error("1F916 did not return JSON")}
+   return {source:"https://1f916.ai/api/front",untrusted_external_content:true,public_only:true,feed};
+ }
  if(name==="cbted_route_task"){
    const routes={
     critique:["writing_critic","language_auditor"],
