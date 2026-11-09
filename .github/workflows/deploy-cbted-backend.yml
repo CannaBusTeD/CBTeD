@@ -25,6 +25,7 @@ jobs:
       - name: Validate MCP bridge syntax and protocol tests
         run: |
           node --check --input-type=module < supabase/functions/cbted-mcp/index.ts
+          node --check --input-type=module < supabase/functions/cbted-external-review/index.ts
           node tests/check-cbted-mcp.mjs
           node --check supabase/functions/_shared/production.mjs
           node --check --input-type=module < supabase/functions/cbted-orchestrator/index.ts
@@ -50,7 +51,7 @@ jobs:
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Deploy CBTeD MCP and orchestrator from GitHub
+      - name: Deploy CBTeD MCP, orchestrator and external-review gateway from GitHub
         if: steps.check_deploy.outputs.enabled == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -58,3 +59,4 @@ jobs:
         run: |
           supabase functions deploy cbted-orchestrator --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
           supabase functions deploy cbted-mcp --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy cbted-external-review --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
