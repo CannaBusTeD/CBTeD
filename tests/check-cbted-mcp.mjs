@@ -25,6 +25,11 @@ const fakeFetch=async(url,options={})=>{
       ? new Response(JSON.stringify({id:testUser,email:"tester@example.test"}),{status:200})
       : new Response(JSON.stringify({error:"unauthorized"}),{status:401});
   }
+  if(uri.includes("/functions/v1/cbted-external-review")){
+    const body=JSON.parse(options.body||"{}");
+    if(body.action==="list")return new Response(JSON.stringify({reviews:[]}),{status:200});
+    return new Response(JSON.stringify({error:"Mock denies unplanned review write"}),{status:403});
+  }
   if(uri.includes("/rest/v1/projects?")){
     return new Response(JSON.stringify([{id:"00000000-0000-4000-8000-000000000002",owner_id:testUser,title:"Test Project",status:"active"}]),{status:200});
   }
@@ -106,3 +111,18 @@ for(const mode of ["writing_critique","writing_suggestions","writing_line_edit",
 }
 assert.ok(lyricPayload.documents.some(d=>d.path==="writing/Lyric_Master.md"));
 assert.match(gate.content,/client explicitly asks for a full rewrite/);
+
+for(const required of ["cbted_review_create","cbted_review_list","cbted_review_approve","cbted_review_reviewers","cbted_review_add_reviewer","cbted_review_approve_reviewer","cbted_review_invite","cbted_review_feedback","cbted_review_revoke","cbted_review_complete","cbted_1f916_front"]){
+  assert.ok(names.includes(required),required+" must be in MCP tool list");
+  assert.ok(list.result.tools.find(t=>t.name===required).securitySchemes.some(s=>s.type==="oauth2"),required+" must require OAuth");
+}
+const beforePrivate=networkCalls;
+const missingAuth=await rpc("tools/call",{name:"cbted_review_list",arguments:{project_id:"00000000-0000-4000-8000-000000000002"}},false);
+assert.equal(missingAuth.result.isError,true);
+assert.equal(networkCalls,beforePrivate,"Unauthenticated review call must not contact backend");
+const permittedReview=await rpc("tools/call",{name:"cbted_review_list",arguments:{project_id:"00000000-0000-4000-8000-000000000002"}},true);
+assert.equal(permittedReview.result.isError,false);
+assert.deepEqual(JSON.parse(permittedReview.result.content[0].text).reviews,[]);
+const deniedApproval=await rpc("tools/call",{name:"cbted_review_approve",arguments:{review_id:"00000000-0000-4000-8000-000000000010"}},true);
+assert.equal(deniedApproval.result.isError,true,"Review backend denial must not be ignored");
+console.log("External review MCP authentication and denial tests passed.");
