@@ -35,6 +35,9 @@ const tools = [
   tool("cbted_finish_production_step","Record actual output after a previously authorised tool operation. Media requires a project-owned verified private asset, not a prompt or temporary link.",{run_id:U,step_key:S,result:{type:"string",enum:["passed","failed"]},text:S,asset_id:U,evidence:{type:"object"}},["run_id","step_key","result"],false),
   tool("cbted_retry_production_step","Retry exactly one failed stage, preserving all previously passed stages and stopping after the permitted attempt count.",{run_id:U,step_key:S},["run_id","step_key"],false),
 
+  tool("cbted_review_reviewers","List the reviewer's private owner-scoped directory, including pending and owner-approved agents.",{},[],true),
+  tool("cbted_review_add_reviewer","Create a pending specialist reviewer entry. No access is granted until the user confirms the reviewer consents and approves an invitation.",{display_name:{type:"string",minLength:1,maxLength:120},provider:{type:"string",enum:["1f916","direct","other"]},external_agent_id:{type:"string",maxLength:250}},["display_name"],false),
+  tool("cbted_review_approve_reviewer","Owner attests they independently confirmed this reviewer's identity and willingness to receive private work. This is manual trust, not cryptographic identity verification.",{reviewer_id:U,confirmed_consent:{type:"boolean",const:true}},["reviewer_id","confirmed_consent"],false),
   tool("cbted_review_create","Create a PRIVATE DRAFT external review from one existing project output. This does not approve sharing, invite anyone, or post publicly.",{project_id:U,output_id:U,brief:{type:"string",maxLength:6000}},["project_id","output_id"],false),
   tool("cbted_review_list","List external review drafts and statuses in an owned project without retrieving unpublished content.",{project_id:U},["project_id"],true),
   tool("cbted_review_approve","Explicitly approve a specific private review package for sharing with individually authorised invited reviewers. NEVER assume permission.",{review_id:U},["review_id"],false),
@@ -93,6 +96,7 @@ const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
 
  const reviewActions={
+   cbted_review_reviewers:"reviewers",cbted_review_add_reviewer:"reviewer_add",cbted_review_approve_reviewer:"reviewer_approve",
    cbted_review_create:"create",cbted_review_list:"list",cbted_review_approve:"approve",
    cbted_review_invite:"invite",cbted_review_feedback:"feedback",
    cbted_review_revoke:"revoke",cbted_review_complete:"complete"
