@@ -26,7 +26,7 @@ const tools = [
   tool("cbted_approve_source_version","Record an explicit user decision about a particular source version. Approval is append-only and must not be invented or inferred.",{project_id:U,source_version_id:U,decision:{type:"string",enum:["approved","rejected","revoked"]},note:S},["project_id","source_version_id","decision"],false),
   tool("cbted_add_project_rule","Append a locked project or studio rule/correction, retaining previous revisions. Only use for a user-authorised decision.",{project_id:U,scope:{type:"string",enum:["project","writing","visual","animation"]},rule_key:{type:"string",minLength:1,maxLength:160},rule_kind:{type:"string",enum:["constraint","correction","decision","preference","reference"]},body:{type:"string",minLength:1},is_locked:{type:"boolean"}},["project_id","scope","rule_key","rule_kind","body"],false),
   tool("cbted_get_asset_link","For an asset owned by the connected user, create a short-lived signed URL to access its PRIVATE Supabase Storage file. ChatGPT must still inspect the actual source image rather than trusting its metadata.",{project_id:U,asset_id:U},["project_id","asset_id"],true),
-  tool("cbted_social_suggest_accounts","Prepare five possible profile URLs from one username. Suggestions are unverified and never grant account access.",{username:{type:"string",minLength:1,maxLength:100}},["username"],true),
+  tool("cbted_social_suggest_accounts","Prepare suggested profiles from a username or identify the platform of a pasted HTTPS profile URL. Never grant account access based on a handle or URL.",{username:{type:"string",minLength:1,maxLength:320}},["username"],true),
   tool("cbted_social_connection_status","Show verified social account connections and post approvals. No secrets are returned.",{},[],true),
   tool("cbted_social_begin_authorisation","Create a single-use secure official account-approval link for YouTube, Facebook Page, Instagram, TikTok or X. User MUST personally open and approve the platform consent screen.",{provider:{type:"string",enum:["youtube","facebook","instagram","tiktok","x"]},handle:S},["provider"],false),
   tool("cbted_social_confirm_account","After provider sign-in, confirm one of the actual platform-returned accounts is the intended account.",{connection_id:U},["connection_id"],false),
@@ -109,16 +109,34 @@ const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
 
  if(name==="cbted_social_suggest_accounts"){
-   const raw=String(a.username||"").trim().replace(/^@/,"").replace(/\s+/g,"");
-   if(!/^[\p{L}\p{N}._-]{1,60}$/u.test(raw))throw Error("Enter one valid social username");
+   const input=String(a.username||"").trim();
+   let raw=input,chosen=null,originalLink=null;
+   if(/^https:\/\//i.test(input)){
+     const u=new URL(input);
+     if(u.username||u.password||u.port)throw Error("Use an official social profile URL");
+     const host=u.hostname.toLowerCase().replace(/^www\./,"").replace(/^m\./,"");
+     chosen=host==="youtube.com"?"youtube":host==="facebook.com"?"facebook":host==="instagram.com"?"instagram":host==="tiktok.com"?"tiktok":host==="x.com"||host==="twitter.com"?"x":null;
+     if(!chosen)throw Error("Unsupported social profile host");
+     const parts=u.pathname.split("/").filter(Boolean);
+     raw=parts[0]||"";
+     if((chosen==="youtube"&&raw==="channel")||(chosen==="facebook"&&raw==="profile.php")){
+       return {username:null,verified:false,connections_created:0,profiles:[{provider:chosen,url:input}],note:"Profile link identified, but a platform sign-in is still required to verify account ownership."};
+     }
+     raw=raw.replace(/^@/,"");
+     originalLink=input;
+   }else raw=raw.replace(/^@/,"").replace(/\s+/g,"");
+   if(!/^[\p{L}\p{N}._-]{1,60}$/u.test(raw))throw Error("Enter a social handle or official profile URL");
    const encoded=encodeURIComponent(raw);
-   return {username:raw,verified:false,connections_created:0,profiles:[
+   const profiles=[
     {provider:"youtube",url:"https://www.youtube.com/@"+encoded},
     {provider:"facebook",url:"https://www.facebook.com/"+encoded},
     {provider:"instagram",url:"https://www.instagram.com/"+encoded+"/"},
     {provider:"tiktok",url:"https://www.tiktok.com/@"+encoded},
     {provider:"x",url:"https://x.com/"+encoded}
-   ],note:"Suggestions only. Open a platform's official Connect flow to grant consent."};
+   ];
+   if(chosen){const profile=profiles.find(x=>x.provider===chosen);profile.url=originalLink;}
+   return {username:raw,verified:false,connections_created:0,profiles,
+    identified_provider:chosen,note:"Suggested links are not connected accounts. The user must approve the official platform authorisation request."};
  }
  const socialActions={
   cbted_social_connection_status:"status",cbted_social_begin_authorisation:"start",
