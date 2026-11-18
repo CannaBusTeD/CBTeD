@@ -66,3 +66,4 @@ jobs:
           supabase functions deploy cbted-orchestrator --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy cbted-mcp --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy cbted-external-review --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy cbted-social-connect --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
