@@ -31,5 +31,7 @@ jobs:
         run: node tests/check-orchestrator-live.mjs
       - name: Verify external review rejects unauthenticated access
         run: node tests/check-external-review-live.mjs
+      - name: Verify the live connector asks Claude to sign in and the sign-in page is published
+        run: node tests/check-cbted-mcp-live.mjs
       - name: Verify the published production interface is available
         run: node tests/check-production-site.mjs
