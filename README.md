@@ -27,7 +27,12 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 - The new `cbted-orchestrator` Edge Function is deployed. It offers deterministic, project-owned planning and separate authorised stage execution.
 - PostgreSQL tables `production_runs`, `production_steps` and `production_approvals` persist the production plan, specialist work and explicit approvals. Additive migrations have been applied, including a check for **real private Storage objects**, not merely asset metadata, before media stages can pass.
 - The controller defines **30 specialist agent roles** for idea development, writing, language-pattern review, storyboarding, image design, audio, video and publishing. Only controlled backend text/image adapters are currently implemented; no working audio/video provider, final editor or publishing service has been verified.
-- The `idea_to_publish` workflow (feature branch, database change not yet applied) runs one project from idea to platforms: idea > approved idea > writing > story storyboard > images > motion storyboard > video clips > assembly > release audit > publish. Publishing fails closed until the publishing service is built. See [orchestration](docs/ORCHESTRATION.md).
+- The `idea_to_publish` workflow runs one project from idea to platforms: idea > approved idea > writing > story storyboard > images > motion storyboard > video clips > assembly > release audit > publish.
+  - It is live in the database and the orchestrator as of 18 November 2026.
+  - The MCP connector update is not deployed yet.
+  - Publishing fails closed until the publishing service is built.
+  - Video generation and assembly are not connected yet.
+  - See [orchestration](docs/ORCHESTRATION.md).
 - Planning never authorises generation. Paid backend execution is disabled unless API credentials, model choices, an explicit enable flag and a per-run operation cap are all configured.
 - GitHub contains the canonical source and CI workflows. GitHub-to-Supabase automatic deployment additionally needs `SUPABASE_ACCESS_TOKEN` configured in GitHub Actions.
 - See [orchestration architecture and verification](docs/ORCHESTRATION.md) and [MCP integration](mcp/README.md).

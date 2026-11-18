@@ -73,7 +73,13 @@ This is an orchestration foundation, not a fully autonomous video-production ser
 The production creation RPC now recomputes the authoritative stage graph independently of the browser or model, then rejects any plan whose ordered keys, agent roles, dependencies, output types or approval flags differ. Migration `20261103134741_enforce_canonical_production_plan.sql` installs `cbted_canonical_plan` and updates `cbted_prepare_production`. Both helpers are denied direct execution by ordinary client roles. A rollback-only Supabase test confirmed that a one-step image plan is rejected and that the full 2-image plan can advance only after prerequisite stages and explicit approval. This is a structural guard: it does not magically interpret whether the user's natural-language request was understood correctly, so user-visible previews and tests remain necessary.
 
 ## Verification record, 18 November 2026 (idea to publish, feature branch)
-- Migration `20261118120000_idea_to_publish_workflow.sql` is the live definitions of `cbted_canonical_plan`, `cbted_prepare_production` and `cbted_finish_production_step`, checked byte for byte against the live database by checksum, with additions only. It has **not** been applied to the live database. Apply it explicitly, then rename the file to the version Supabase records.
+- Migration `20261118024113_idea_to_publish_workflow.sql` is the live definitions of `cbted_canonical_plan`, `cbted_prepare_production` and `cbted_finish_production_step`, checked byte for byte against the live database by checksum, with additions only.
+- It was applied to the live database on 18 November 2026, with Ted's approval. The file is named after the version Supabase recorded. Live checks after applying:
+  - The fingerprint of all 445 valid existing-workflow plans was unchanged.
+  - The 400 idea-to-publish plans, the three function bodies and the three constraints matched the locally tested versions by checksum.
+  - A rollback-only owner test on live confirmed registration (26 stages), the idea approval gate, the publishing approval gate and fail-closed publishing. It saved nothing.
+- `cbted-orchestrator` was deployed as version 5 from this branch. The deployed files were read back and matched GitHub byte for byte.
+- `cbted-mcp` has **not** been redeployed yet, so the connector does not yet offer `idea_to_publish`. Deploying it needs `SUPABASE_ACCESS_TOKEN` configured for the backend deploy workflow.
 - `tests/sql/run-check.sh` rebuilt that live schema in a throwaway local PostgreSQL 16 database and applied the migration. Results:
   - All 4,761 other inputs gave identical results before and after. These cover the eight existing workflows plus an unknown workflow name, at every image and clip count from -1 to 21.
   - The database plans matched the JavaScript planner for all 528 checked plans, including all 400 idea-to-publish image and clip counts.
