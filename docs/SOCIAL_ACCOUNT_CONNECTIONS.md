@@ -25,21 +25,53 @@ The conversational CBTeD plugin is the **primary user experience**, not a separa
 
 Needed MCP tools once the secure backend is installed: `cbted_social_suggest_accounts`, `cbted_social_begin_authorisation`, `cbted_social_connection_status` and `cbted_social_disconnect`. These tools must share exactly the same Supabase owner isolation and provider verification as the web view. No ChatGPT tool can approve a platform's OAuth permissions on behalf of the user.
 
-## Implementation separation
+## Implementation status
 
-Current branch milestone: accessible one-handle suggested-profile screen, per-site overrides, honest sign-in state, guarded OAuth-start controls and tests. No provider callback, token exchange or real posting capability is included in this milestone; the Connect buttons remain disabled if the backend does not advertise provider readiness.
+The current implementation provides the **CBTeD plugin and accessible optional web page** with:
+- Single-username suggestions and pasted profile URLs for YouTube, Facebook, Instagram, TikTok and X.
+- Per-provider official OAuth request URLs, ten-minute one-use state verification, Google/X PKCE, and a fixed HTTPS callback.
+- Supabase owner-scoped social connection records and separately AES-GCM-encrypted provider tokens.
+- Platform-returned account/channel/Page discovery, explicit final account selection, local disconnect and status inspection.
+- Post approval drafts for real saved video assets, per-destination approval/rejection, and an explicit fail-closed publishing endpoint.
 
-The server API contract for the next stage:
+**Not yet complete:** platform administrator app credentials, external platform permissions or audit, provider token refresh, account-provider revocation where offered, production upload workers, scheduling, final publishing verification, and a real live end-to-end account-login test. No publishing request is sent until all of those are implemented and tested.
 
-- `GET /functions/v1/cbted-social-connect/status`: authenticated; returns `{available, connections:[{provider,account_id,account_handle,display_name,status,post_permission}]}` with **no credentials**.
-- `POST /functions/v1/cbted-social-connect/start`: authenticated, provider allowlist and suggested handle; checks configuration and returns `{authorize_url}`. This action does not grant permission.
-- Fixed provider redirect URI, server-side state verification and authorisation-code exchange. The callback must redirect to CBTeD without credentials or raw codes in the returned page.
-- Explicit Disconnect/Reconnect commands and provider token revocation where supported.
-- Storage separated between public connection metadata and encrypted credentials. Tokens must never be accessible through browser RLS reads, GitHub files, or any public MCP tool.
-- Audit trail and publishing opt-in, per-post approval, rate limits, retries, cancellation and failure handling are required before enabling publication.
+The account screen must show honest status and never claim that suggested profile links are authorisations.
 
-## Quality gates before deployment
+## One-time CBTeD platform setup (not a task for ordinary creators)
 
-Account linking is blocked until an external API service with state, callback, token storage, refresh, disconnect, platform identity verification and owner isolation has passed tests. OAuth callback must reject expired/replayed/mismatched state, unknown provider, credentials for the wrong user, and channels/Pages not authorised by the provider. No automatic or public posts until separate publishing controls pass integration tests.
+The CBTeD administrator registers platform applications once. Each individual user only provides their profile address, selects Connect, signs in on the provider's site, confirms the returned account in CBTeD, then approves future posts.
 
-Accessibility: clear text labels, normal keyboard/screen-reader controls, focus management, live status text and readable provider consent flows. No QR-only setup, no guessing from a picture, no unnecessary account password re-entry.
+All platforms use the registered callback:
+`https://dmzzyfiwtosxtyekpbfi.supabase.co/functions/v1/cbted-social-connect/callback`
+
+Configured environment variables in **private Supabase Edge Function secrets** (never in client code, chat or public GitHub):
+
+| Platform | Secret variables |
+| --- | --- |
+| Google / YouTube | `CBTED_GOOGLE_CLIENT_ID`, `CBTED_GOOGLE_CLIENT_SECRET` |
+| Meta / Facebook Pages + Instagram Professional | `CBTED_META_CLIENT_ID`, `CBTED_META_CLIENT_SECRET` |
+| TikTok | `CBTED_TIKTOK_CLIENT_KEY`, `CBTED_TIKTOK_CLIENT_SECRET` |
+| X | `CBTED_X_CLIENT_ID`, `CBTED_X_CLIENT_SECRET` |
+| Shared encryption | `CBTED_SOCIAL_ENCRYPTION_KEY` (fresh, private 32-byte base64-encoded key) |
+
+The function additionally uses existing Supabase-managed `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a publishable or anon key for user validation.
+
+The provider developer dashboards must approve the required publishing scopes: YouTube upload; Meta Page management or Instagram content publish; TikTok `video.publish`; X `tweet.write` plus media-upload eligibility. Users may need an eligible professional Page or account. CBTeD must never pretend a publishing scope exists if the provider didn't actually grant it.
+
+After the provider callback, CBTeD shows **only platform-returned identities** for explicit confirmation. No artist can connect an arbitrary other person's profile by pasting its link. When authorisation is missing, the Connect button remains unavailable.
+
+## Posting approval and release boundary
+
+The production controller may draft a per-target request only for a **verified private project video asset** and an account confirmed with posting permission. Creator approval is recorded per request. No scheduled or public post is assumed live on approval alone.
+
+Until the provider-specific upload service is fully implemented, the `publish` action deliberately returns HTTP 501 without posting. Never mark a request as submitted, completed or verified based on a prompt, guessed URL or prior consent.
+
+## Testing and rollout
+
+Use `node --test tests/check-social-connect.mjs tests/check-social-oauth.mjs` plus the repository's full orchestration/MCP tests. The tests cover route discovery, unconfigured clients, anonymous calls, bad domains, one-use state patterns, owner isolation and fail-closed posting. The tests **do not constitute real provider OAuth approval**.
+
+Before public launch: run an authenticated test against each platform's sandbox/test account, confirm returned account selection, verify encrypted credential storage, test token renewal and disconnect, then test a private/draft upload and the provider's actual returned post status. Review Meta/TikTok app approval requirements first.
+
+Accessibility: all important fields and actions have text labels, focusable controls and readable status messages. Don't require QR scanning or visual-only consent.
+
