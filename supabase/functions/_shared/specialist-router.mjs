@@ -6,6 +6,8 @@ export const OPERATIONS=Object.freeze({
   review_lyrics:{studio:"writing",requires:["source_text"],steps:["source_check","writing_critique","writing_language_audit","writing_proofread","writing_review"]},
   create_images:{studio:"visual",requires:["brief"],steps:["visual_analysis","visual_select_tool","visual_prompt","visual_generate","visual_review"]},
   create_audio:{studio:"audio",requires:["brief"],steps:["audio_direction","audio_select_tool","audio_generate","audio_review"]},
+  // Direct text-to-video does not require generating or approving a still image first.
+  create_video_from_idea:{studio:"animation",requires:["brief"],steps:["source_check","animation_storyboard","animation_motion_plan","animation_select_tool","animation_generate","animation_review"]},
   animate_image:{studio:"animation",requires:["image_asset_id","brief"],steps:["source_check","animation_storyboard","animation_motion_plan","animation_select_tool","animation_generate","animation_review"]},
   make_music_video:{studio:"animation",requires:["image_asset_id","audio_asset_id","brief"],steps:["source_check","animation_storyboard","animation_motion_plan","animation_select_tool","animation_generate","animation_review","animation_assembly","release_audit"]}
 });
@@ -14,6 +16,8 @@ export function routeSpecialist(input={}){
  const operation=String(input.operation||"");
  const spec=OPERATIONS[operation];if(!spec)throw Error("Select a supported specialist operation");
  const brief=String(input.brief||"").trim(),source=String(input.source_text||"").trim();
+ const previous=String(input.previous_operation||"");
+ if(previous&&!(previous in OPERATIONS))throw Error("Unknown previous specialist operation");
  if(spec.requires.includes("brief")&&!brief)throw Error("A creative brief is required");
  if(spec.requires.includes("source_text")&&!source)throw Error("The supplied verse or lyrics are required");
  if(brief.length>20000||source.length>120000)throw Error("Source exceeds supported input length");
@@ -39,6 +43,9 @@ export function routeSpecialist(input={}){
   steps.splice(0,steps.length,...ordered);
  }
  return {operation,studio:spec.studio,requires:spec.requires,source_preserved:true,independent:true,
+  previous_operation:previous||null,direction_changed:!!previous&&previous!==operation,
+  original_idea:brief||null,reuse_previous_media:spec.requires.includes("image_asset_id")||spec.requires.includes("audio_asset_id"),
+  skipped_studios:["writing","visual","audio","animation"].filter(x=>x!==spec.studio),
   steps,executed:false,created:false,
   note:"This is a specialist execution contract, not generated content. ChatGPT must run each actual creative tool, verify its output and record results."};
 }
