@@ -19,6 +19,12 @@
 
 CBTeD platform administrator performs developer-app registration and keeps client IDs/secrets, encryption keys, refresh tokens and API integration settings on the trusted backend. **Ordinary creators never need their own developer keys.** Third-party platforms can deny access, require additional verification or require the user to select eligible accounts.
 
+## Primary entry: CBTeD inside ChatGPT
+
+The conversational CBTeD plugin is the **primary user experience**, not a separate website users must learn. A creator can simply say "Connect my socials; my username is CannaBusTeD". The plugin's MCP tools should return suggested profile links, explain verified connection status, start the provider-specific official consent URL and poll for actual completion. The optional accessible web page is a fallback/redirect companion for login approval and users who prefer a browser.
+
+Needed MCP tools once the secure backend is installed: `cbted_social_suggest_accounts`, `cbted_social_begin_authorisation`, `cbted_social_connection_status` and `cbted_social_disconnect`. These tools must share exactly the same Supabase owner isolation and provider verification as the web view. No ChatGPT tool can approve a platform's OAuth permissions on behalf of the user.
+
 ## Implementation separation
 
 Current branch milestone: accessible one-handle suggested-profile screen, per-site overrides, honest sign-in state, guarded OAuth-start controls and tests. No provider callback, token exchange or real posting capability is included in this milestone; the Connect buttons remain disabled if the backend does not advertise provider readiness.
