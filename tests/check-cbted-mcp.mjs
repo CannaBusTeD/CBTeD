@@ -25,6 +25,9 @@ const fakeFetch=async(url,options={})=>{
       ? new Response(JSON.stringify({id:testUser,email:"tester@example.test"}),{status:200})
       : new Response(JSON.stringify({error:"unauthorized"}),{status:401});
   }
+  if(uri.includes("/functions/v1/cbted-social-connect/status")){
+    return new Response(JSON.stringify({available:false,providers:{youtube:false,facebook:false,instagram:false,tiktok:false,x:false},connections:[],post_requests:[]}),{status:200});
+  }
   if(uri.includes("/functions/v1/cbted-external-review")){
     const body=JSON.parse(options.body||"{}");
     if(body.action==="list")return new Response(JSON.stringify({reviews:[]}),{status:200});
