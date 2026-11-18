@@ -19,4 +19,24 @@ assert.equal(video.studio,"animation");
 assert.ok(!video.steps.some(s=>s.studio==="writing"||s.studio==="visual"));
 assert.throws(()=>routeSpecialist({operation:"make_music_video",brief:"Video"}),/image_asset_id/);
 assert.throws(()=>routeSpecialist({operation:"edit_lyrics",brief:"Edit"}),/supplied verse/);
-console.log("PASS independent CBTeD specialist routing and required inputs");
+
+const directVideo=routeSpecialist({operation:"create_video_from_idea",brief:"A short film showing cats and dogs"});
+assert.equal(directVideo.studio,"animation");
+assert.deepEqual(directVideo.steps.filter(s=>s.kind==="video").map(s=>s.key),["animation_generate"]);
+assert.equal(directVideo.steps.find(s=>s.kind==="video").requires_approval,true);
+assert.ok(!directVideo.steps.some(s=>s.studio==="writing"||s.studio==="visual"||s.studio==="audio"));
+assert.ok(!directVideo.requires.includes("image_asset_id"));
+assert.ok(!directVideo.requires.includes("source_text"));
+assert.equal(directVideo.executed,false);
+const switchToVideo=routeSpecialist({
+ operation:"create_video_from_idea",previous_operation:"create_images",
+ brief:"Cats and dogs playing in the rain"
+});
+assert.equal(switchToVideo.direction_changed,true);
+assert.equal(switchToVideo.original_idea,"Cats and dogs playing in the rain");
+assert.equal(switchToVideo.reuse_previous_media,false);
+assert.ok(switchToVideo.skipped_studios.includes("visual"));
+assert.ok(!switchToVideo.steps.some(s=>s.key.startsWith("visual_")||s.key.startsWith("writing_")));
+assert.throws(()=>routeSpecialist({operation:"create_video_from_idea"}),/brief/);
+assert.throws(()=>routeSpecialist({operation:"create_video_from_idea",brief:"Video",previous_operation:"unknown"}),/previous/);
+console.log("PASS independent CBTeD specialist routing and direct idea-to-video switching");
