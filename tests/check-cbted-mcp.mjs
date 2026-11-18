@@ -136,3 +136,15 @@ assert.deepEqual(JSON.parse(permittedReview.result.content[0].text).reviews,[]);
 const deniedApproval=await rpc("tools/call",{name:"cbted_review_approve",arguments:{review_id:"00000000-0000-4000-8000-000000000010"}},true);
 assert.equal(deniedApproval.result.isError,true,"Review backend denial must not be ignored");
 console.log("External review MCP authentication and denial tests passed.");
+
+const directRoute=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:"video_from_idea",previous_intent:"images",has_existing_source:false,has_image:false,video_count:2}},true);
+assert.equal(directRoute.result.isError,false,"An idea must route to video without existing assets");
+const directPlan=JSON.parse(directRoute.result.content[0].text);
+assert.deepEqual(directPlan.studios,["animation"]);
+assert.equal(directPlan.previous_intent,"images");
+assert.equal(directPlan.direction_changed,true);
+assert.equal(directPlan.generation_started,false);
+assert.equal(directPlan.stages.filter(x=>x.agent==="video_generator").length,2);
+assert.ok(!directPlan.stages.some(x=>x.studio==="writing"||x.studio==="visual"||x.studio==="audio"));
+const stillRequired=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:"video_from_assets",has_existing_source:true,has_image:false}},true);
+assert.equal(stillRequired.result.isError,true,"Image-to-video must still require its source image");
