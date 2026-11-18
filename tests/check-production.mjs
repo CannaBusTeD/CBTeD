@@ -145,3 +145,12 @@ test("orchestrator uses the shared checks and blocks unbuilt publishing",()=>{
  assert.match(src,/Only the publishing service can confirm a post/);
 });
 
+
+test("animation-only workflow accepts an idea and never mandates writing or still images",()=>{
+ const plan=buildPlan({workflow:"animation",intent:"execute",video_count:2});
+ assert.deepEqual([...new Set(plan.steps.map(s=>s.studio))],["animation","core"]);
+ assert.ok(!plan.steps.some(s=>s.studio==="writing"||s.studio==="visual"||s.studio==="audio"));
+ assert.deepEqual(plan.steps.filter(s=>s.agent==="video_generator").map(s=>s.key),["animation_generate_1","animation_generate_2"]);
+ assert.equal(plan.steps.find(s=>s.key==="animation_generate_1").approval_required,true);
+ assert.equal(plan.steps.find(s=>s.key==="animation_generate_2").approval_required,true);
+});

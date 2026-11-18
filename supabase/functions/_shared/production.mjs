@@ -18,7 +18,7 @@ export const AGENTS = Object.freeze({
   image_generator:{studio:"visual",role:"Create one image, using approved references and the authorised tool.",kind:"image"},
   image_reviewer:{studio:"visual",role:"Inspect the actual image independently against its prompt, rules and continuity.",kind:"text"},
   storyboarding_director:{studio:"animation",role:"Plan chronology, continuity, camera, and sequence timings.",kind:"text"},
-  motion_prompt_writer:{studio:"animation",role:"Plan image-to-video motion using verified approved stills.",kind:"text"},
+  motion_prompt_writer:{studio:"animation",role:"Plan shot motion for text-to-video from an idea, or image-to-video using verified approved stills only when supplied.",kind:"text"},
   video_tool_selector:{studio:"animation",role:"Select an actual configured video-generation provider.",kind:"text"},
   video_generator:{studio:"animation",role:"Produce exactly one verified motion asset.",kind:"video"},
   video_reviewer:{studio:"animation",role:"Inspect actual output for temporal, facial and camera continuity.",kind:"text"},

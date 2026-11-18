@@ -10,12 +10,15 @@ export const ROUTES=Object.freeze({
  images:{studio:"visual",agents:["visual_analyst","visual_tool_selector","visual_prompt_writer","image_generator","image_reviewer"]},
  audio:{studio:"audio",agents:["audio_director","audio_tool_selector","audio_generator","audio_reviewer"]},
  video_from_assets:{studio:"animation",agents:["storyboarding_director","motion_prompt_writer","video_tool_selector","video_generator","video_reviewer"]},
+ video_from_idea:{studio:"animation",agents:["storyboarding_director","motion_prompt_writer","video_tool_selector","video_generator","video_reviewer"]},
  complete:{studio:"core",agents:[]}
 });
 const key=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-export function routeTask({intent,source_kind,has_existing_source=false,has_image=false,has_audio=false,image_count=1,video_count=1}={}){
+export function routeTask({intent,previous_intent,source_kind,has_existing_source=false,has_image=false,has_audio=false,image_count=1,video_count=1}={}){
  const mode=key(intent);
  if(!(mode in ROUTES))throw Error("Unknown CBTeD task intent; clarify before proceeding");
+ const previous=previous_intent==null?"":key(previous_intent);
+ if(previous&&!(previous in ROUTES))throw Error("Unknown previous CBTeD task intent");
  if(!Number.isInteger(image_count)||image_count<1||image_count>20)throw Error("Image count must be one to twenty");
  if(!Number.isInteger(video_count)||video_count<1||video_count>20)throw Error("Video count must be one to twenty");
  if(["editorial","rewrite","suggestions","critique","line_edit","video_from_assets"].includes(mode)&&!has_existing_source)throw Error("Existing source is required for this task");
@@ -30,7 +33,8 @@ export function routeTask({intent,source_kind,has_existing_source=false,has_imag
  if(mode==="complete"){
    sequence("new_song");sequence("images");sequence("audio");sequence("video_from_assets");
  }else sequence(mode);
- return {intent:mode,source_kind:source_kind||null,reuse_existing_source:!!has_existing_source,
+ return {intent:mode,previous_intent:previous||null,direction_changed:!!previous&&previous!==mode,
+   generation_started:false,requires_website:false,source_kind:source_kind||null,reuse_existing_source:!!has_existing_source,
    reuse_existing_image:!!has_image,reuse_existing_audio:!!has_audio,
    studios:[...new Set(stages.map(x=>x.studio))],stages};
 }
