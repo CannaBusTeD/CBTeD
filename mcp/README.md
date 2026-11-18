@@ -19,6 +19,13 @@ The existing web project manager is optional supporting infrastructure. The OAut
 
 The server embeds thirteen full rule documents from the GitHub repository, together with their original blob SHA identifiers. Changes to these governing documents require rebundling and redeploying the server. Rules are returned directly to ChatGPT, not replaced by a generic summary.
 
+## Connecting from Claude
+
+Claude uses the standard MCP sign-in.
+- `initialize` without a valid CBTeD sign-in returns HTTP 401. Its `WWW-Authenticate` challenge points at the protected-resource metadata, so Claude registers itself (dynamic client registration) and opens the CBTeD consent page.
+- The consent page trusts only ChatGPT's connector callback and Claude's callbacks: `https://claude.ai/api/mcp/auth_callback` and `https://claude.com/api/mcp/auth_callback`. The check lives in `app/oauth/consent/callbacks.mjs`, with tests in `tests/check-oauth-callbacks.mjs`.
+- Public rules stay readable without sign-in through `tools/call` `cbted_get_rulebook`. The orchestrator relies on that.
+
 ## Tools exposed
 
 Public read: cbted_get_rulebook.

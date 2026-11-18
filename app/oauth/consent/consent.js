@@ -1,18 +1,14 @@
-// OAuth 2.1 consent UI for ChatGPT, not a creative production workspace.
+// OAuth 2.1 consent UI for AI assistants (Claude, ChatGPT), not a creative production workspace.
 // Browser holds its existing Supabase login. No private secrets go into GitHub.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
 import { loadPublicConfig } from "../../config.js";
+import { safeCallbackUrl } from "./callbacks.mjs";
 
 const $=id=>document.getElementById(id);
 const authId=new URL(location.href).searchParams.get("authorization_id");
 const status=(message,error=false)=>{$("status").textContent=message;$("status").classList.toggle("error",error);};
 const show=id=>{$("signin").hidden=id!=="signin";$("consent").hidden=id!=="consent";};
 const setBusy=busy=>["approve","deny","signin-button","switch-account"].forEach(id=>{$(id).disabled=busy;});
-const safeChatGPTUrl=(text)=>{
-  const url=new URL(text);
-  if(url.protocol!=="https:"||url.hostname!=="chatgpt.com"||!url.pathname.startsWith("/connector"))throw Error("The authorization destination is not a recognised ChatGPT callback");
-  return url.toString();
-};
 let db;
 async function openConsent(){
   const {data:{user},error:userError}=await db.auth.getUser();
@@ -21,13 +17,14 @@ async function openConsent(){
   const {data,error}=await db.auth.oauth.getAuthorizationDetails(authId);
   if(error||!data)throw Error(error?.message||"Authorization request not found or expired");
   if(data.redirect_url&&!data.authorization_id){
-    location.assign(safeChatGPTUrl(data.redirect_url));
+    location.assign(safeCallbackUrl(data.redirect_url));
     return;
   }
   if(!data.client?.name||!data.redirect_uri)throw Error("Authorization request has incomplete client details");
-  safeChatGPTUrl(data.redirect_uri);
+  safeCallbackUrl(data.redirect_uri);
   $("signed-in-as").textContent=user.email||"CBTeD user";
   $("client-name").textContent=data.client.name;
+  document.querySelectorAll(".assistant-name").forEach(el=>{el.textContent=data.client.name;});
   $("redirect-uri").textContent=data.redirect_uri;
   const scopes=String(data.scope||"").split(" ").filter(Boolean);
   $("scopes").replaceChildren(...(scopes.length?scopes:["Access as your signed-in CBTeD user"]).map(s=>{
@@ -41,7 +38,7 @@ async function decide(approve){
     const {data,error}=approve?await db.auth.oauth.approveAuthorization(authId):await db.auth.oauth.denyAuthorization(authId);
     if(error)throw error;
     if(!data?.redirect_url)throw Error("No callback returned by the authentication provider");
-    location.assign(safeChatGPTUrl(data.redirect_url));
+    location.assign(safeCallbackUrl(data.redirect_url));
   }catch(error){status("Authorization failed: "+(error?.message||"Unknown error"),true);setBusy(false);}
 }
 async function init(){
