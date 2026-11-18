@@ -54,3 +54,20 @@ test("line-edit request never becomes song generation",()=>{
  assert.deepEqual(p.studios,["writing"]);
  assert.ok(!p.stages.some(s=>s.agent==="writing_synthesizer"||s.agent==="writing_author"));
 });
+
+test("direct idea-to-video bypasses all unused studios, without requiring an image",()=>{
+ const p=routeTask({intent:"video_from_idea",video_count:2});
+ assert.deepEqual(p.studios,["animation"]);
+ assert.equal(p.stages.filter(x=>x.agent==="video_generator").length,2);
+ assert.ok(!p.stages.some(x=>x.studio==="writing"||x.studio==="visual"||x.studio==="audio"));
+ assert.equal(p.reuse_existing_image,false);
+ assert.equal(p.generation_started,false);
+});
+test("rejected image can route straight to video without discarding previous work",()=>{
+ const p=routeTask({intent:"video_from_idea",previous_intent:"images",has_image:false});
+ assert.equal(p.previous_intent,"images");
+ assert.equal(p.direction_changed,true);
+ assert.deepEqual(p.studios,["animation"]);
+ assert.ok(!p.stages.some(x=>x.agent==="image_generator"||x.agent==="writing_author"));
+ assert.throws(()=>routeTask({intent:"video_from_idea",previous_intent:"unknown"}),/previous/);
+});
