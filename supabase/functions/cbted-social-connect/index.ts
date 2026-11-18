@@ -263,7 +263,7 @@ Deno.serve(async(request)=>{
   if(action==="publish")return response({error:"Provider posting adapters have not been authorised and tested; no post sent."},501);
   return response({error:"Unknown action"},404);
  }catch(e){const message=String(e?.message||"Request rejected").slice(0,200);
-  const code=/not configured|missing/i.test(message)?503:/expired|sign-in/i.test(message)?401:400;
+  const code=/not configured|not been configured|missing/i.test(message)?503:/expired|sign-in/i.test(message)?401:400;
   return response({error:message},code);
  }
 });
