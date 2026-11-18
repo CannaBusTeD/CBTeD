@@ -3,7 +3,7 @@
 import {PROVIDERS,META_VERSION,configuredProvider,providerAuthorisationUrl,providerTokenEndpoint,parseGrantedScopes,canPost,isValidProvider} from "../_shared/social-providers.mjs";
 const ROOT=String(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
 const SERVICE=String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
-const ANON=String(Deno.env.get("SUPABASE_ANON_KEY")||"");
+const ANON=(()=>{const direct=Deno.env.get("SUPABASE_ANON_KEY")||Deno.env.get("SUPABASE_PUBLISHABLE_KEY");if(direct)return String(direct);try{return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")||"{}").default||""}catch{return ""}})();
 const CALLBACK=ROOT+"/functions/v1/cbted-social-connect/callback";
 const RETURN="https://cannabusted.github.io/CBTeD/socials.html";
 const HEADERS={"content-type":"application/json","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"apikey,authorization,content-type","access-control-allow-methods":"GET,POST,OPTIONS"};
@@ -184,7 +184,7 @@ async function start(user,body){
  const settings=configuredProvider(provider,Deno.env);
  if(!settings.enabled||!configured()[provider])throw Error(provider+" account authorisation has not been configured yet");
  const hint=validateHint(body.handle);
- const state=random(),verifier=provider==="youtube"||provider==="x"?random()+random():null;
+ await encryptionKey(); // Reject bad or absent encryption configuration before issuing a consent link.\n const state=random(),verifier=provider==="youtube"||provider==="x"?random()+random():null;
  const challenge=verifier?await codeChallenge(verifier):null;
  await rest("cbted_social_oauth_states","POST",{},{
   state_hash:await sha256(state),owner_id:user,provider,expected_handle:hint||null,
