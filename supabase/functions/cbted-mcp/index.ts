@@ -76,6 +76,12 @@ async function authenticate(request){
 function challenge(){
  return 'Bearer resource_metadata="'+METADATA+'", error="invalid_token", error_description="Connect your CBTeD account to access private projects"';
 }
+// Standard MCP authorization: answer an unauthenticated connection with HTTP 401 and a WWW-Authenticate
+// challenge, so spec-following clients such as Claude start OAuth instead of connecting anonymously.
+function unauthorized(){
+ return new Response(JSON.stringify({error:"invalid_token",error_description:"Sign in to CBTeD to connect"}),
+  {status:401,headers:{...headers,"WWW-Authenticate":challenge(),"Access-Control-Expose-Headers":"WWW-Authenticate"}});
+}
 function authError(){
  return {isError:true,content:[{type:"text",text:"CBTeD authentication required. Connect your existing CBTeD Supabase account."}],_meta:{"mcp/www_authenticate":[challenge()]}};
 }
@@ -310,6 +316,10 @@ Deno.serve(async(request)=>{
  if(!rpc||typeof rpc!=="object"||Array.isArray(rpc))return response(fail(null,-32600,"Invalid request"),400);
  if(rpc.method==="notifications/initialized")return new Response(null,{status:202,headers});
  if(rpc.method==="initialize"){
+   // Connecting needs a real CBTeD sign-in. Public rules stay readable through tools/call (the orchestrator uses that).
+   let signedIn=null;
+   try{signedIn=await authenticate(request);}catch(e){return response(fail(rpc.id??null,-32603,String(e?.message||"Authentication unavailable").slice(0,200)),500);}
+   if(!signedIn)return unauthorized();
    const versions=["2025-11-25","2025-06-18","2025-03-26","2024-11-05"];
    const asked=rpc.params?.protocolVersion;
    return response(reply(rpc.id,{protocolVersion:versions.includes(asked)?asked:"2025-06-18",capabilities:{tools:{listChanged:false}},serverInfo:{name:"CBTeD",version:"0.1.0"},instructions:"Call cbted_get_rulebook first for the full authoritative rules before any creative work. Use ChatGPT native tools to perform each requested output independently; MCP is only the project memory/rules bridge. Never claim an output exists from a task record alone."}));
