@@ -78,7 +78,7 @@ test("actual backend refuses anonymous users, unconfigured starts and publishing
  const post=(action,payload)=>new Request(base+action,{method:"POST",headers:{Authorization:"Bearer fake-but-verified"},body:JSON.stringify(payload)});
  const start=await handler(post("start",{provider:"youtube",handle:"CannaBusTeD"}));
  assert.equal(start.status,503);
- const d=await start.json();assert.match(d.error,/not configured/i);
+ const d=await start.json();assert.match(d.error,/not (been )?configured/i);
  const publish=await handler(post("publish",{request_id:"irrelevant"}));
  assert.equal(publish.status,501);
  const invalid=await handler(new Request(base+"callback?state=short&code=abc"));
