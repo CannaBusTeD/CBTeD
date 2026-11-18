@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.cbted-external-review]
 verify_jwt = false # Handler verifies Supabase identity or a restricted review token.
+
+[functions.cbted-social-connect]
+verify_jwt = false # Handler validates CBTeD user JWT except for one-time OAuth callback state.
