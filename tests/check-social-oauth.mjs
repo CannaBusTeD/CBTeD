@@ -67,7 +67,7 @@ test("actual backend refuses anonymous users, unconfigured starts and publishing
  };
  const sandbox={Deno:{env:{get(k){return env[k]||null}},serve(fn){handler=fn}},Response,Request,URL,URLSearchParams,
    TextEncoder,crypto:webcrypto,fetch:fakeFetch,atob,btoa,console};
- const withoutImports=src.replace(/^import\s+\{[^\n]+\}\s+from\s+"[^"]+";\s*/,"");
+ const withoutImports=src.replace(/^import\s+\{[^\n]+\}\s+from\s+"[^"]+";\s*/m,"");
  const values=await import("../supabase/functions/_shared/social-providers.mjs");
  Object.assign(sandbox,values);
  vm.runInNewContext(withoutImports,sandbox,{filename:"cbted-social-connect/index.ts"});
