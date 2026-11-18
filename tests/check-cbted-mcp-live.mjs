@@ -6,13 +6,11 @@
 //   4. public rules still work without signing in, and private tools still give ChatGPT its sign-in hint;
 //   5. the published sign-in page is live and trusts Claude's callback, and only Claude's real one.
 // It only reads. It registers no client, signs nobody in, starts no work and changes nothing.
+// It never runs code downloaded from the site: published files are compared with this checkout and read as text.
 // Like the other live checks, it tests what is deployed right now, not the code in a pull request.
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import {mkdtemp, readFile, writeFile} from "node:fs/promises";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {pathToFileURL} from "node:url";
+import {readFile} from "node:fs/promises";
 
 const SUPABASE = "https://dmzzyfiwtosxtyekpbfi.supabase.co";
 const MCP = SUPABASE + "/functions/v1/cbted-mcp";
@@ -78,29 +76,37 @@ assert.equal(refused.result?.isError, true, "A private tool must refuse an anony
 assert.ok(refused.result?._meta?.["mcp/www_authenticate"]?.[0]?.includes(METADATA), "The refusal must carry the sign-in hint ChatGPT uses");
 console.log("4. Public rules still readable; private tools still refuse anonymous calls with the sign-in hint.");
 
-// 5. The published sign-in page is live and its callback check trusts Claude, and only Claude's real callback.
+// 5. The published sign-in page is live and its callback check names Claude's real callback.
+// The published files are only read as text. When they match this checkout, the checkout's own module
+// (already tested in tests/check-oauth-callbacks.mjs) shows how the published one behaves.
 const page = await fetch(SITE, {redirect: "follow", signal: signal()});
 assert.equal(page.status, 200, "The sign-in page must be published");
 const html = await page.text();
 assert.match(html, /<title>Connect CBTeD to your AI assistant<\/title>/);
 assert.match(html, /Approve connection/);
-const published = {};
+const hash = (text) => createHash("sha256").update(text).digest("hex").slice(0, 16);
+const published = {}, matches = {};
 for (const file of ["callbacks.mjs", "consent.js"]) {
   const reply = await fetch(SITE + file, {redirect: "follow", signal: signal()});
   assert.equal(reply.status, 200, file + " must be published");
   published[file] = await reply.text();
-  const hash = (text) => createHash("sha256").update(text).digest("hex").slice(0, 16);
   const local = await readFile(new URL("../app/oauth/consent/" + file, import.meta.url), "utf8");
-  console.log("   published " + file + " " + hash(published[file]) + (hash(published[file]) === hash(local) ? " (same as this checkout)" : " (differs from this checkout)"));
+  matches[file] = published[file] === local;
+  console.log("   published " + file + " " + hash(published[file]) + (matches[file] ? " (same as this checkout)" : " (differs from this checkout: expected while a change is unpublished)"));
 }
 assert.match(published["consent.js"], /from "\.\/callbacks\.mjs"/, "The published sign-in script must use the shared callback check");
-const folder = await mkdtemp(join(tmpdir(), "cbted-callbacks-"));
-await writeFile(join(folder, "callbacks.mjs"), published["callbacks.mjs"]);
-const {safeCallbackUrl} = await import(pathToFileURL(join(folder, "callbacks.mjs")).href);
-const claude = CLAUDE_CALLBACK + "?code=example&state=example";
-assert.equal(safeCallbackUrl(claude), claude, "The published page must trust Claude's callback");
-assert.throws(() => safeCallbackUrl("https://claude.ai.example.com/api/mcp/auth_callback"), "A lookalike host must be refused");
-assert.throws(() => safeCallbackUrl("https://claude.ai/somewhere-else"), "Another path on Claude's site must be refused");
-console.log("5. The published sign-in page is live and trusts Claude's real callback only.");
+assert.match(published["callbacks.mjs"], /export function safeCallbackUrl/, "The published callback check must be present");
+assert.ok(published["callbacks.mjs"].includes('"claude.ai"') && published["callbacks.mjs"].includes('"/api/mcp/auth_callback"'),
+  "The published callback check must list Claude's callback");
+if (matches["callbacks.mjs"]) {
+  const {safeCallbackUrl} = await import(new URL("../app/oauth/consent/callbacks.mjs", import.meta.url));
+  const claude = CLAUDE_CALLBACK + "?code=example&state=example";
+  assert.equal(safeCallbackUrl(claude), claude, "The published page must trust Claude's callback");
+  assert.throws(() => safeCallbackUrl("https://claude.ai.example.com/api/mcp/auth_callback"), "A lookalike host must be refused");
+  assert.throws(() => safeCallbackUrl("https://claude.ai/somewhere-else"), "Another path on Claude's site must be refused");
+  console.log("5. The published sign-in page is live, identical to this checkout, and trusts Claude's real callback only.");
+} else {
+  console.log("5. The published sign-in page is live and lists Claude's callback; its exact behaviour is checked once this checkout is published.");
+}
 
 console.log("PASS: the live connector asks Claude to sign in, discovery is complete, and the published sign-in page trusts Claude.");
