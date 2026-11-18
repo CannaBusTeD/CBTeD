@@ -53,8 +53,8 @@ GET /health reports service status (not user data).
 ## Deployment checklist
 1. Review and merge the feature PR after GitHub Actions syntax and behaviour tests succeed. Its browser Production Controller is in `app/production.html`, linked from `app/index.html`, and uses the existing Supabase browser login.
 2. Both production migrations have already been applied to the live CBTeD Supabase project: `20261103131357_create_cbted_production_controller.sql` and `20261103132458_require_existing_private_asset_for_media.sql`. Do not reapply them to the same database.
-3. Configure a GitHub deployment secret `SUPABASE_ACCESS_TOKEN` and review access to `cbted-production` environment.
-4. The Edge Functions have been manually deployed to project `dmzzyfiwtosxtyekpbfi` from the same development branch. The repository contains CI deployment automation, but GitHub-to-Supabase automatic deployment is not considered operational until the credential is configured and a real workflow deployment succeeds.
+3. The GitHub deployment secret `SUPABASE_ACCESS_TOKEN` is configured (18 November 2026). Review who can approve the `cbted-production` environment.
+4. GitHub-to-Supabase deployment is operational. A merge to `main` touching `supabase/functions/**` runs `deploy-cbted-backend.yml`, which deploys `cbted-orchestrator`, `cbted-mcp` and `cbted-external-review` with `--yes`. It can also be started by hand with workflow_dispatch. Do not hand-deploy these functions any more.
 5. Test an authenticated owner preparing a disposable run, inspecting status, blocked claim, explicit approval, real output and stage advancement. Test a second account denied access.
 6. Configure provider credentials only after checking costs and terms. Keep live paid generation off until the separate approval workflow is proven.
 
@@ -79,7 +79,9 @@ The production creation RPC now recomputes the authoritative stage graph indepen
   - The 400 idea-to-publish plans, the three function bodies and the three constraints matched the locally tested versions by checksum.
   - A rollback-only owner test on live confirmed registration (26 stages), the idea approval gate, the publishing approval gate and fail-closed publishing. It saved nothing.
 - `cbted-orchestrator` was deployed as version 5 from this branch. The deployed files were read back and matched GitHub byte for byte.
-- `cbted-mcp` has **not** been redeployed yet, so the connector does not yet offer `idea_to_publish`. Deploying it needs `SUPABASE_ACCESS_TOKEN` configured for the backend deploy workflow.
+- The first deploy from GitHub with the new secret (run 44283969795) failed safely. The current Supabase CLI requires `--yes` when a run cannot ask for confirmation, and the CLI reported "Nothing was changed". PR #8 added `--yes`. Run 44284390636 then deployed `cbted-orchestrator` v6, `cbted-mcp` v10 and `cbted-external-review` v3 from commit `0e34af2`.
+- Every deployed `cbted-mcp` file was read back and matched GitHub byte for byte. The connector now offers `idea_to_publish`.
+- Before that deploy, the live `cbted-mcp` v9 and `cbted-external-review` v2 were also compared with GitHub. They matched, apart from the one intended enum line, so the first automatic deploy changed nothing else.
 - `tests/sql/run-check.sh` rebuilt that live schema in a throwaway local PostgreSQL 16 database and applied the migration. Results:
   - All 4,761 other inputs gave identical results before and after. These cover the eight existing workflows plus an unknown workflow name, at every image and clip count from -1 to 21.
   - The database plans matched the JavaScript planner for all 528 checked plans, including all 400 idea-to-publish image and clip counts.
