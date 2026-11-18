@@ -11,7 +11,24 @@ Writing: author > critic > editor > synthetic-language-pattern auditor > synthes
 Visual: analyst > tool selector > prompt writer > one image generator > actual-image reviewer for each separate image.
 Audio: musical director > audio tool selector > audio generator > audio review.
 Animation: storyboard > motion prompt > video tool selector > one video generator > actual-video reviewer for each clip > assembly > final release audit.
+Idea: idea developer > idea critic > idea refiner.
+Story storyboard: scene storyboarder (one scene per planned image).
+Publish: publish planner > publisher > publish verifier.
 The language auditor flags formulaic phrasing but cannot determine human or AI authorship reliably.
+
+## Idea to publish workflow (`idea_to_publish`)
+One run takes an idea all the way to the platforms, in this order:
+1. Craft the idea: `idea_develop` > `idea_critique` > `idea_refine`.
+2. Write it: the seven writing stages. `writing_draft` needs the creator's explicit approval, which is the "approve the idea" moment.
+3. Storyboard it: `story_storyboard` breaks the approved writing into one scene per planned image.
+4. Images: `visual_analysis` > `visual_select_tool` > for each image: prompt > generate (approval) > review.
+5. Motion storyboard: `animation_storyboard` > `animation_motion_plan` > `animation_select_tool`.
+6. Video: for each clip: generate (approval) > review, then `animation_assembly` (approval) and `release_audit`.
+7. Publish: `publish_plan` (per-platform titles, descriptions, privacy, schedule, AI disclosure) > `publish_send` (approval) > `publish_verify`.
+
+It does not generate music. Existing workflows are unchanged.
+`publish_send` uses the new step kind `publish` in the new studio `publish`. Like media, it always needs its own approval.
+Until the publishing service exists, publishing fails closed in three places: the orchestrator refuses to run `publish_send` or `publish_verify`; its external finish route refuses to mark a publish stage passed; and `cbted_finish_production_step` refuses `passed` for any publish stage, whoever calls it.
 
 ## Two distinct instructions
 - **Plan**: preview the deterministic stages without database mutation or generation.
@@ -54,6 +71,19 @@ This is an orchestration foundation, not a fully autonomous video-production ser
 ## Mandatory canonical graph validation
 
 The production creation RPC now recomputes the authoritative stage graph independently of the browser or model, then rejects any plan whose ordered keys, agent roles, dependencies, output types or approval flags differ. Migration `20261103134741_enforce_canonical_production_plan.sql` installs `cbted_canonical_plan` and updates `cbted_prepare_production`. Both helpers are denied direct execution by ordinary client roles. A rollback-only Supabase test confirmed that a one-step image plan is rejected and that the full 2-image plan can advance only after prerequisite stages and explicit approval. This is a structural guard: it does not magically interpret whether the user's natural-language request was understood correctly, so user-visible previews and tests remain necessary.
+
+## Verification record, 18 November 2026 (idea to publish, feature branch)
+- Migration `20261118120000_idea_to_publish_workflow.sql` is the live definitions of `cbted_canonical_plan`, `cbted_prepare_production` and `cbted_finish_production_step`, checked byte for byte against the live database by checksum, with additions only. It has **not** been applied to the live database. Apply it explicitly, then rename the file to the version Supabase records.
+- `tests/sql/run-check.sh` rebuilt that live schema in a throwaway local PostgreSQL 16 database and applied the migration. Results:
+  - All 4,761 other inputs gave identical results before and after. These cover the eight existing workflows plus an unknown workflow name, at every image and clip count from -1 to 21.
+  - The database plans matched the JavaScript planner for all 528 checked plans, including all 400 idea-to-publish image and clip counts.
+  - All 28 permission and approval scenarios behaved correctly.
+  - The check was proven to fail when the migration was deliberately broken.
+- Fixed three escaping bugs in the orchestrator. They had never run, because no production run had ever been created.
+  - The image size check could never match, so every image generation would have failed.
+  - The review verdict check could never match, so every review would have failed, even a real PASS.
+  - The review instruction contained a literal `\n`.
+  - The checks now live in `production.mjs` (`parseImageSize`, `reviewPassed`) with tests.
 
 ## Database migration history reconciliation
 

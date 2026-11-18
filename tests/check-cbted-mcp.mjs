@@ -106,7 +106,7 @@ for(const mode of ["critique","suggestions","rewrite"]){
 }
 
 const prodTool=list.result.tools.find(t=>t.name==="cbted_plan_production");
-for(const mode of ["writing_critique","writing_suggestions","writing_line_edit","writing_rewrite"]){
+for(const mode of ["writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","idea_to_publish"]){
  assert.ok(prodTool.inputSchema.properties.workflow.enum.includes(mode),"MCP must expose workflow "+mode);
 }
 assert.ok(lyricPayload.documents.some(d=>d.path==="writing/Lyric_Master.md"));

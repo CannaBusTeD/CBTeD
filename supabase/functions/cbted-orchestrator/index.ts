@@ -1,6 +1,6 @@
 // CBTeD authenticated orchestration gateway. GitHub is the code source of truth.
 // Native ChatGPT tools cannot be intercepted here. Backend-managed execution IS gated.
-import {AGENTS,buildPlan,authorisation,modelInstruction} from "../_shared/production.mjs";
+import {AGENTS,buildPlan,authorisation,modelInstruction,parseImageSize,reviewPassed} from "../_shared/production.mjs";
 const ROOT=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function key(){
@@ -70,7 +70,7 @@ function preview(body){
 async function fullRulebook(studio){
  // Reuse the pinned full rule documents from the existing MCP; do not invent partial rules.
  const path=ROOT+"/functions/v1/cbted-mcp";
- const result=await requestJSON(path,{"content-type":"application/json"},"POST",{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"cbted_get_rulebook",arguments:{studio:studio==="audio"?"core":studio==="animation"?"animation":studio}}});
+ const result=await requestJSON(path,{"content-type":"application/json"},"POST",{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"cbted_get_rulebook",arguments:{studio:["audio","publish"].includes(studio)?"core":studio==="animation"?"animation":studio}}});
  if(result.error||result.result?.isError)throw Error("Full master/studio rules unavailable");
  const payload=result.result?.structuredContent||JSON.parse(result.result?.content?.[0]?.text||"{}");
  if(!Array.isArray(payload.documents)||!payload.documents.some(d=>d.path==="core/CBTeD_Workflow.md"))throw Error("Master source missing");
@@ -112,9 +112,7 @@ async function runImage(prompt,user,project,token){
  const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_IMAGE_MODEL");
  if(!secret||!model)throw Error("Image provider is not configured");
  const size=Deno.env.get("CBTED_IMAGE_SIZE")||"1536x864";
- const dimensions=/^(\\d{3,4})x(\\d{3,4})$/.exec(size),width=Number(dimensions?.[1]),height=Number(dimensions?.[2]);
- if(!dimensions||width%16||height%16||width>3840||height>2160||width/height>3||height/width>3)
-  throw Error("Image size must be valid supported WIDTHxHEIGHT");
+ const {width,height}=parseImageSize(size);
  const allAssets=await rest(token,"assets",{project_id:"eq."+project,limit:"200"});
  const references=allAssets.filter(a=>["reference","character_reference","style_reference","input_reference"].includes(a.asset_role)&&["image/png","image/jpeg","image/webp"].includes(a.mime_type));
  if(references.length>16)throw Error("More than 16 reference images: select a smaller project reference set");
@@ -153,6 +151,8 @@ async function executeOne(token,user,s){
   if(verdict.allowed){chosen=step;break;}blocked.push({step:step.key,reason:verdict.reason});
  }
  if(!chosen)return {executed:false,blocked};
+ if(chosen.kind==="publish"||chosen.agent==="publish_verifier")
+   return {executed:false,blocked:[{step:chosen.key,reason:"Publishing to platforms is not connected yet. Nothing was posted."}]};
  if(!["text","image"].includes(chosen.kind))return {executed:false,blocked:[{step:chosen.key,reason:"No configured backend adapter for "+chosen.kind+"; actual generation required"}]};
  if(["audio_reviewer","video_reviewer","release_auditor"].includes(chosen.agent))
    return {executed:false,blocked:[{step:chosen.key,reason:"Cannot honestly review actual audio/video without a media-inspection adapter"}]};
@@ -170,7 +170,7 @@ async function executeOne(token,user,s){
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
  const isReview=["writing_reviewer","image_reviewer"].includes(chosen.agent);
- if(isReview)prompt+="\\n\\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Completion of steps is not proof of quality.";
+ if(isReview)prompt+="\n\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Completion of steps is not proof of quality.";
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
    :null;
@@ -178,7 +178,7 @@ async function executeOne(token,user,s){
  try{
    const result=chosen.kind==="text"?await runText(prompt,imageData):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token);
-   const reviewFailed=isReview&&!/^VERDICT:\\s*PASS\\b/i.test(result.text||"");
+   const reviewFailed=isReview&&!reviewPassed(result.text);
    await rpc(token,"cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
     p_text:result.text||null,p_asset:result.asset_id||null,
@@ -244,6 +244,7 @@ Deno.serve(async(request)=>{
    const r=await requireRun(user.token,body.run_id);
    const steps=await rest(user.token,"production_steps",{run_id:"eq."+r.id,step_key:"eq."+body.step_key,limit:"1"});
    if(steps.length!==1)throw Error("Stage not found");
+   if(body.result==="passed"&&steps[0].kind==="publish")throw Error("Only the publishing service can confirm a post");
    if(body.result==="passed"&&["image","video","audio"].includes(steps[0].kind)){
     const assets=await rest(user.token,"assets",{id:"eq."+requiredUUID(body.asset_id,"asset"),project_id:"eq."+r.project_id,limit:"1"});
     if(assets.length!==1)throw Error("Persisted owned asset missing");

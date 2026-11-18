@@ -23,9 +23,18 @@ export const AGENTS = Object.freeze({
   video_generator:{studio:"animation",role:"Produce exactly one verified motion asset.",kind:"video"},
   video_reviewer:{studio:"animation",role:"Inspect actual output for temporal, facial and camera continuity.",kind:"text"},
   sequence_assembler:{studio:"animation",role:"Assemble verified clips and audio into a final sequence.",kind:"video"},
-  release_auditor:{studio:"core",role:"Check final source, verified outputs, rules and complete delivery.",kind:"text"}
+  release_auditor:{studio:"core",role:"Check final source, verified outputs, rules and complete delivery.",kind:"text"},
+  idea_developer:{studio:"core",role:"Develop the creator's rough idea into one clear concept: premise, audience, message, tone, format, length and target platforms. Keep the creator's own words and intent.",kind:"text"},
+  idea_critic:{studio:"core",role:"Challenge the concept honestly: originality, clarity, hook, audience fit and whether the configured tools can actually make it.",kind:"text"},
+  idea_refiner:{studio:"core",role:"Combine the concept, the critique and the creator's corrections into one final concept brief for the writers.",kind:"text"},
+  scene_storyboarder:{studio:"visual",role:"Turn the approved writing into numbered scenes, one per planned image: what is seen, who appears, setting, mood and the line or moment it serves.",kind:"text"},
+  publish_planner:{studio:"publish",role:"Write each platform's title, description, hashtags, privacy, schedule and AI-content disclosure for the final video. Never invent connected accounts.",kind:"text"},
+  publisher:{studio:"publish",role:"Send only the approved final video and approved text to the approved connected accounts, through the configured publishing service only.",kind:"publish"},
+  publish_verifier:{studio:"publish",role:"Check the publishing service's actual status for every platform and report each live link or error. Never assume a post succeeded.",kind:"text"}
 });
-const allowed = new Set(["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","plan_only"]);
+const allowed = new Set(["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","idea_to_publish","plan_only"]);
+// Approval-gated kinds: anything that spends money on media or acts in public.
+export const GATED_KINDS=Object.freeze(["image","video","audio","publish"]);
 export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={}){
   if(!allowed.has(workflow))throw Error("Unknown workflow");
   if(!["plan","execute"].includes(intent))throw Error("Intent must be plan or execute");
@@ -38,6 +47,7 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     if(!(agent in AGENTS))throw Error("Missing agent");
     for(const dep of depends_on){if(!steps.some(s=>s.key===dep))throw Error("Dependency must precede dependent stage: "+dep);}
     const cfg=AGENTS[agent];
+    if(GATED_KINDS.includes(cfg.kind)&&!approval_required)throw Error("Media and publishing stages require explicit approval");
     steps.push({key,agent,studio:cfg.studio,kind:cfg.kind,depends_on,approval_required,description:cfg.role,sequence:steps.length+1});
     return key;
   }
@@ -51,8 +61,15 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     }[workflow];
     for(const [key,agent] of selection)writingLast=add(key,agent,writingLast?[writingLast]:[]);
   }
-  if(["writing","song_video"].includes(workflow)){
-    writingLast=add("writing_draft","writing_author");
+  let ideaLast=null;
+  if(workflow==="idea_to_publish"){
+    ideaLast=add("idea_develop","idea_developer");
+    ideaLast=add("idea_critique","idea_critic",[ideaLast]);
+    ideaLast=add("idea_refine","idea_refiner",[ideaLast]);
+  }
+  if(["writing","song_video","idea_to_publish"].includes(workflow)){
+    // In idea_to_publish the creator must explicitly approve the refined idea before any writing starts.
+    writingLast=add("writing_draft","writing_author",ideaLast?[ideaLast]:[],workflow==="idea_to_publish");
     writingLast=add("writing_critique","writing_critic",[writingLast]);
     writingLast=add("writing_edit","writing_editor",[writingLast]);
     writingLast=add("writing_language_audit","language_auditor",[writingLast]);
@@ -60,9 +77,12 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     writingLast=add("writing_proofread","writing_proofreader",[writingLast]);
     writingLast=add("writing_review","writing_reviewer",[writingLast]);
   }
+  let storyLast=null;
+  if(workflow==="idea_to_publish")storyLast=add("story_storyboard","scene_storyboarder",[writingLast]);
   let visualLast=null;
-  if(["visual","song_video"].includes(workflow)){
-    let last=add("visual_analysis","visual_analyst",writingLast?[writingLast]:[]);
+  if(["visual","song_video","idea_to_publish"].includes(workflow)){
+    const before=storyLast||writingLast;
+    let last=add("visual_analysis","visual_analyst",before?[before]:[]);
     last=add("visual_select_tool","visual_tool_selector",[last]);
     for(let i=1;i<=image_count;i++){
       const prompt=add("visual_prompt_"+i,"visual_prompt_writer",[last]);
@@ -78,7 +98,8 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     audioLast=add("audio_generate","audio_generator",[audioLast],true);
     audioLast=add("audio_review","audio_reviewer",[audioLast]);
   }
-  if(["animation","song_video"].includes(workflow)){
+  let releaseLast=null;
+  if(["animation","song_video","idea_to_publish"].includes(workflow)){
     let last=add("animation_storyboard","storyboarding_director",[...new Set([visualLast,audioLast].filter(Boolean))]);
     last=add("animation_motion_plan","motion_prompt_writer",[last]);
     last=add("animation_select_tool","video_tool_selector",[last]);
@@ -87,9 +108,26 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
       last=add("animation_review_"+i,"video_reviewer",[video]);
     }
     const assembled=add("animation_assembly","sequence_assembler",[last],true);
-    add("release_audit","release_auditor",[assembled]);
+    releaseLast=add("release_audit","release_auditor",[assembled]);
+  }
+  if(workflow==="idea_to_publish"){
+    // Publishing is a public, side-effecting action: it always needs its own explicit approval.
+    let last=add("publish_plan","publish_planner",[releaseLast]);
+    last=add("publish_send","publisher",[last],true);
+    add("publish_verify","publish_verifier",[last]);
   }
   return {intent,workflow,steps};
+}
+export function parseImageSize(size){
+  const match=/^(\d{3,4})x(\d{3,4})$/.exec(String(size??""));
+  const width=Number(match?.[1]),height=Number(match?.[2]);
+  if(!match||width%16||height%16||width>3840||height>2160||width/height>3||height/width>3)
+    throw Error("Image size must be valid supported WIDTHxHEIGHT");
+  return {width,height};
+}
+// A review passes only when its text starts with an explicit PASS verdict. Anything else fails closed.
+export function reviewPassed(text){
+  return /^VERDICT:\s*PASS\b/i.test(String(text??"").trimStart());
 }
 export function authorisation({plan,step_key,states={},approvals={},rules_changed=false}){
   if(plan.intent!=="execute")return {allowed:false,reason:"Planning or explanation does not authorise execution"};
