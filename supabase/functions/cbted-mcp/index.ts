@@ -109,8 +109,8 @@ const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
 
  if(name==="cbted_social_suggest_accounts"){
-   const raw=String(a.username||"").trim().replace(/^@/,"").replace(/\\s+/g,"");
-   if(!/^[\\p{L}\\p{N}._-]{1,60}$/u.test(raw))throw Error("Enter one valid social username");
+   const raw=String(a.username||"").trim().replace(/^@/,"").replace(/\s+/g,"");
+   if(!/^[\p{L}\p{N}._-]{1,60}$/u.test(raw))throw Error("Enter one valid social username");
    const encoded=encodeURIComponent(raw);
    return {username:raw,verified:false,connections_created:0,profiles:[
     {provider:"youtube",url:"https://www.youtube.com/@"+encoded},
