@@ -26,6 +26,13 @@ const tools = [
   tool("cbted_approve_source_version","Record an explicit user decision about a particular source version. Approval is append-only and must not be invented or inferred.",{project_id:U,source_version_id:U,decision:{type:"string",enum:["approved","rejected","revoked"]},note:S},["project_id","source_version_id","decision"],false),
   tool("cbted_add_project_rule","Append a locked project or studio rule/correction, retaining previous revisions. Only use for a user-authorised decision.",{project_id:U,scope:{type:"string",enum:["project","writing","visual","animation"]},rule_key:{type:"string",minLength:1,maxLength:160},rule_kind:{type:"string",enum:["constraint","correction","decision","preference","reference"]},body:{type:"string",minLength:1},is_locked:{type:"boolean"}},["project_id","scope","rule_key","rule_kind","body"],false),
   tool("cbted_get_asset_link","For an asset owned by the connected user, create a short-lived signed URL to access its PRIVATE Supabase Storage file. ChatGPT must still inspect the actual source image rather than trusting its metadata.",{project_id:U,asset_id:U},["project_id","asset_id"],true),
+  tool("cbted_social_suggest_accounts","Prepare five possible profile URLs from one username. Suggestions are unverified and never grant account access.",{username:{type:"string",minLength:1,maxLength:100}},["username"],true),
+  tool("cbted_social_connection_status","Show verified social account connections and post approvals. No secrets are returned.",{},[],true),
+  tool("cbted_social_begin_authorisation","Create a single-use secure official account-approval link for YouTube, Facebook Page, Instagram, TikTok or X. User MUST personally open and approve the platform consent screen.",{provider:{type:"string",enum:["youtube","facebook","instagram","tiktok","x"]},handle:S},["provider"],false),
+  tool("cbted_social_confirm_account","After provider sign-in, confirm one of the actual platform-returned accounts is the intended account.",{connection_id:U},["connection_id"],false),
+  tool("cbted_social_disconnect","Revoke CBTeD's stored local access for one social connection. Do not invoke without an explicit request.",{connection_id:U},["connection_id"],false),
+  tool("cbted_social_create_post_draft","Prepare one account-specific finished VIDEO for creator approval. Does NOT publish.",{project_id:U,asset_id:U,connection_id:U,title:S,caption:S,privacy:{type:"string",enum:["private","unlisted","public"]},scheduled_at:S},["project_id","asset_id","connection_id"],false),
+  tool("cbted_social_approve_post","Record the creator's explicit approval or rejection of one specific post draft. Actual platform posting requires a separate working verified adapter.",{request_id:U,decision:{type:"string",enum:["approved","rejected"]}},["request_id","decision"],false),
   tool("cbted_route_task","CBTeD ChatGPT-native coordinator: classify a targeted creative request into independent specialist stages. Does NOT create a run, invoke generation, require the website or demand unrelated studios. For a verse edit, select editorial; for video from existing song and image, select video_from_assets.",{intent:{type:"string",enum:["critique","suggestions","line_edit","editorial","rewrite","new_song","verse","images","audio","video_from_assets","video_from_idea","complete"]},previous_intent:{type:"string"},has_existing_source:{type:"boolean"},has_image:{type:"boolean"},has_audio:{type:"boolean"},image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["intent"],true),
   tool("cbted_plan_production","Plan a CBTeD workflow without generating content. intent=plan is read-only; intent=execute persists a new run but does not start any agents.",{project_id:U,workflow:{type:"string",enum:["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","idea_to_publish","plan_only"]},intent:{type:"string",enum:["plan","execute"]},instructions:S,source_version_id:U,image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["workflow","intent"],false),
   tool("cbted_get_production_status","Read an owned production run, every atomic step and its explicit approval decisions.",{run_id:U},["run_id"],true),
@@ -100,6 +107,37 @@ async function rest(token,table,query={},method="GET",body=null){
 }
 const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
+
+ if(name==="cbted_social_suggest_accounts"){
+   const raw=String(a.username||"").trim().replace(/^@/,"").replace(/\\s+/g,"");
+   if(!/^[\\p{L}\\p{N}._-]{1,60}$/u.test(raw))throw Error("Enter one valid social username");
+   const encoded=encodeURIComponent(raw);
+   return {username:raw,verified:false,connections_created:0,profiles:[
+    {provider:"youtube",url:"https://www.youtube.com/@"+encoded},
+    {provider:"facebook",url:"https://www.facebook.com/"+encoded},
+    {provider:"instagram",url:"https://www.instagram.com/"+encoded+"/"},
+    {provider:"tiktok",url:"https://www.tiktok.com/@"+encoded},
+    {provider:"x",url:"https://x.com/"+encoded}
+   ],note:"Suggestions only. Open a platform's official Connect flow to grant consent."};
+ }
+ const socialActions={
+  cbted_social_connection_status:"status",cbted_social_begin_authorisation:"start",
+  cbted_social_confirm_account:"confirm",cbted_social_disconnect:"disconnect",
+  cbted_social_create_post_draft:"draft-post",cbted_social_approve_post:"approve-post"
+ };
+ if(Object.hasOwn(socialActions,name)){
+   const action=socialActions[name],body=name==="cbted_social_begin_authorisation"?{provider:a.provider,handle:a.handle||""}:
+     name==="cbted_social_confirm_account"||name==="cbted_social_disconnect"?{connection_id:a.connection_id}:
+     name==="cbted_social_create_post_draft"?a:
+     name==="cbted_social_approve_post"?{request_id:a.request_id,decision:a.decision}:null;
+   const endpoint=SUPABASE_URL+"/functions/v1/cbted-social-connect/"+action;
+   const response=await fetch(endpoint,{method:body?"POST":"GET",
+    headers:{"apikey":publishableKey(),"Authorization":"Bearer "+token,...(body?{"Content-Type":"application/json"}:{})},
+    ...(body?{body:JSON.stringify(body)}:{})});
+   let data;try{data=await response.json()}catch{throw Error("Social connector returned invalid data");}
+   if(!response.ok)throw Error("Social connection unavailable: "+String(data.error||"Request rejected").slice(0,180));
+   return data;
+ }
 
  const reviewActions={
    cbted_review_reviewers:"reviewers",cbted_review_add_reviewer:"reviewer_add",cbted_review_approve_reviewer:"reviewer_approve",
