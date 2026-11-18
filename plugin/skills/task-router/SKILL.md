@@ -17,6 +17,8 @@ Read the universal instructions and call `cbted_get_rulebook` before creative wo
 
 **Audio/music:** Activate the Audio Studio only. Use approved lyrics as-is. Make a musical brief, select an actually available integrated tool, generate and inspect real audio where supported. Do not invent provider access.
 
+**Video directly from an idea:** Activate Animation Studio without demanding a song, script or still image. Create a storyboard/motion plan for the stated idea, select a genuinely available text-to-video provider, generate and inspect the video if authorised, and preserve prior approved work. When the creator rejects an image and asks for a video instead, route the new request directly to this branch. Do not repeat the image step, delete the rejected proposal or assume the rejected image is approved. A routing plan is not a generated video.
+
 **Video from existing song and image:** Activate the Animation Studio only. Use the supplied song and image, storyboard motion, choose an available ChatGPT video tool, produce and review each requested clip. Do not rewrite the song or regenerate the image. If the required video tool is unavailable, report the precise limitation, not a fake finished video.
 
 **Full song and video:** Coordinate writing, visual, audio and animation studios with actual approved handoffs. This full pipeline applies only when the user asks for the full pipeline.
