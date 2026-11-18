@@ -30,6 +30,9 @@ jobs:
           node --check supabase/functions/_shared/production.mjs
           node --check --input-type=module < supabase/functions/cbted-orchestrator/index.ts
           node --test tests/check-production.mjs
+          node --test tests/check-social-connect.mjs
+          node --test tests/check-social-oauth.mjs
+          node --check --input-type=module < supabase/functions/cbted-social-connect/index.ts
 
   deploy:
     needs: validate
@@ -63,3 +66,4 @@ jobs:
           supabase functions deploy cbted-orchestrator --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy cbted-mcp --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy cbted-external-review --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy cbted-social-connect --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes

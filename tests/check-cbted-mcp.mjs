@@ -25,6 +25,9 @@ const fakeFetch=async(url,options={})=>{
       ? new Response(JSON.stringify({id:testUser,email:"tester@example.test"}),{status:200})
       : new Response(JSON.stringify({error:"unauthorized"}),{status:401});
   }
+  if(uri.includes("/functions/v1/cbted-social-connect/status")){
+    return new Response(JSON.stringify({available:false,providers:{youtube:false,facebook:false,instagram:false,tiktok:false,x:false},connections:[],post_requests:[]}),{status:200});
+  }
   if(uri.includes("/functions/v1/cbted-external-review")){
     const body=JSON.parse(options.body||"{}");
     if(body.action==="list")return new Response(JSON.stringify({reviews:[]}),{status:200});
@@ -106,6 +109,30 @@ const notification=await handler(new Request(base,{method:"POST",headers:{"Conte
 assert.equal(notification.status,202);
 console.log("CBTeD MCP protocol/auth/rules smoke tests passed ("+list.result.tools.length+" tools).");
 
+for(const expected of ["cbted_social_suggest_accounts","cbted_social_connection_status","cbted_social_begin_authorisation","cbted_social_confirm_account","cbted_social_disconnect","cbted_social_create_post_draft","cbted_social_approve_post"]){
+ assert.ok(names.includes(expected),"Missing social plugin action: "+expected);
+ assert.ok(list.result.tools.find(t=>t.name===expected).securitySchemes.some(s=>s.type==="oauth2"),"Social action must require OAuth: "+expected);
+}
+const unauthSocial=await rpc("tools/call",{name:"cbted_social_connection_status",arguments:{}});
+assert.equal(unauthSocial.result.isError,true,"Anonymous clients cannot see social connections");
+const socialList=await rpc("tools/call",{name:"cbted_social_connection_status",arguments:{}},true);
+assert.equal(socialList.result.isError,false);
+const socialStatus=JSON.parse(socialList.result.content[0].text);
+assert.equal(socialStatus.available,false);
+assert.deepEqual(socialStatus.connections,[]);
+const guess=await rpc("tools/call",{name:"cbted_social_suggest_accounts",arguments:{username:"CannaBusTeD"}},true);
+assert.equal(guess.result.isError,false);
+const suggested=JSON.parse(guess.result.content[0].text);
+assert.equal(suggested.verified,false);
+assert.equal(suggested.profiles.length,5);
+assert.equal(suggested.profiles[4].provider,"x");
+const pasted=await rpc("tools/call",{name:"cbted_social_suggest_accounts",arguments:{username:"https://www.facebook.com/CannaBusTeD"}},true);
+assert.equal(pasted.result.isError,false);
+const suggestedFromLink=JSON.parse(pasted.result.content[0].text);
+assert.equal(suggestedFromLink.identified_provider,"facebook");
+assert.equal(suggestedFromLink.profiles.find(x=>x.provider==="facebook").url,"https://www.facebook.com/CannaBusTeD");
+const spoofed=await rpc("tools/call",{name:"cbted_social_suggest_accounts",arguments:{username:"https://www.facebook.com.bad.example/Someone"}},true);
+assert.equal(spoofed.result.isError,true);
 assert.ok(!names.includes("cbted_create_task")&&!names.includes("cbted_record_output"),"Legacy task APIs must not bypass the production controller");
 for(const mode of ["critique","suggestions","rewrite"]){
  const response=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:mode,has_existing_source:true}},true);

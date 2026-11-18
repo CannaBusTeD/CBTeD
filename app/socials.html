@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="theme-color" content="#250c16">
+ <title>CBTeD | Connect social accounts</title>
+ <link rel="stylesheet" href="./styles.css">
+ <script type="module" src="./socials.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to social accounts</a>
+<header class="site-header"><div class="container header-inner">
+ <a class="brand-lockup" href="./" aria-label="Return to CBTeD Studios">
+  <img class="brand-emblem" src="./assets/cbted-emblem.webp" alt="" width="96" height="96">
+  <span class="brand-text"><span class="eyebrow brand-name">CBTeD</span><span class="brand-studios">SOCIAL ACCOUNTS</span><span class="brand-subtitle">Connect your accounts once</span></span>
+ </a>
+</div></header>
+<main id="main" class="container">
+ <p><a href="./">Back to CBTeD Studios</a></p>
+ <h1>Connect your social accounts</h1>
+ <p>Paste a social profile URL or enter one common username. CBTeD will suggest account addresses for YouTube, Facebook, Instagram, TikTok and X.</p>
+ <p>These are possible profile addresses, not verified accounts. Only each social platform's own secure sign-in and permission screen can connect an account for publishing.</p>
+ <p id="social-status" role="status" aria-live="polite">Sign in to CBTeD Studios first, then come back here.</p>
+ <section class="panel" aria-labelledby="handle-heading">
+  <h2 id="handle-heading">1. Enter your username</h2>
+  <form id="handle-form">
+   <label for="common-handle">Your social username or profile URL
+    <input id="common-handle" name="handle" autocomplete="off" spellcheck="false" placeholder="e.g. CannaBusTeD or https://www.facebook.com/CannaBusTeD" maxlength="320" required>
+   </label>
+   <div class="actions"><button type="submit">Find possible profiles</button></div>
+  </form>
+  <p id="handle-note" class="hint" role="status" aria-live="polite"></p>
+ </section>
+ <section class="panel" aria-labelledby="profiles-heading">
+  <h2 id="profiles-heading">2. Confirm your profiles</h2>
+  <p>Check each suggested address. Your account is only verified after its own official sign-in and approval screen.</p>
+  <div id="social-profiles" aria-live="polite"><p>Enter a username to begin.</p></div>
+ </section>
+ <section class="panel" aria-labelledby="approvals-heading">
+  <h2 id="approvals-heading">3. Grant posting permission</h2>
+  <p>Each Connect button will take you to that platform's own login and consent screen when CBTeD's approved integration is available. You approve there, then return to CBTeD.</p>
+  <p>CBTeD will never ask for your social password. A username alone never permits posting, and posting later requires a separate approval.</p>
+  <p id="connection-status" role="status" aria-live="polite">Account authorisation is not yet confirmed.</p>
+  <section aria-labelledby="post-approvals-heading">
+   <h3 id="post-approvals-heading">Approve your finished posts</h3>
+   <p>CBTeD will show your pending production posts here. Approving a draft does not immediately publish it while the platform posting connectors are being tested.</p>
+   <ul id="post-approvals" class="clean-list"></ul>
+  </section>
+  <ul id="connected-accounts" class="clean-list" aria-label="Accounts actually connected"></ul>
+ </section>
+</main>
+<footer class="container footer">You control your connections and approvals. Nothing is posted by connecting an account.</footer>
+</body>
+</html>
