@@ -1,0 +1,32 @@
+P1 existing workflows changed: 0
+P2 idea_to_publish valid combinations: 400
+P3 idea_to_publish rejections: ERROR: Invalid production count | ERROR: Missing or unexpected media operations
+P4 JS vs SQL mismatches: 0 of 528
+01 other user cannot use Ted's project: ERROR Project access denied
+02 app role cannot call planner directly: ERROR permission denied for function cbted_canonical_plan
+03 tampered: publish without approval: ERROR Workflow violates mandatory canonical stages
+04 tampered: writing without idea approval: ERROR Workflow violates mandatory canonical stages
+05 tampered: skip idea critique: ERROR Workflow violates mandatory canonical stages
+06 tampered: skip publish plan: ERROR Workflow violates mandatory canonical stages
+07 existing visual workflow still registers: OK 
+08 existing song_video workflow still registers: OK 
+09 idea_to_publish 2 images 2 clips registers: OK 
+10 idea_to_publish 1 image 1 clip registered, stages: 26, publish stage: publish_send/publish/publish/approval=true
+11 claim idea_develop: OK
+12 finish idea_develop: OK {"step": "idea_develop", "status": "passed", "run_completed": false}
+13 writing before idea approval: ERROR Explicit approval required
+14 approve the idea: OK
+15 writing after idea approval: OK
+16 claim publish_plan: OK
+17 finish publish_plan: OK {"step": "publish_plan", "status": "passed", "run_completed": false}
+18 publish before approval: ERROR Explicit approval required
+19 approve publishing: OK
+20 claim publish after approval: OK
+21 anyone marking it published: ERROR Publishing is not connected yet; only the publishing service can confirm a post
+22 recording it as failed: OK {"step": "publish_send", "status": "failed", "run_completed": false}
+23 run status now: blocked
+24 verify before a real post: ERROR Run is not active
+25 retry the publish stage: OK true
+26 after retry: run active, publish_send pending
+27 verify still refused after retry: ERROR Previous required stage has not passed
+28 runs created in total: 4 (idea_to_publish, song_video, visual)

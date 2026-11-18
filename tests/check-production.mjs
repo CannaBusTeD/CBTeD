@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {AGENTS,buildPlan,authorisation,modelInstruction} from "../supabase/functions/_shared/production.mjs";
+import {readFileSync} from "node:fs";
+import {AGENTS,GATED_KINDS,buildPlan,authorisation,modelInstruction,parseImageSize,reviewPassed} from "../supabase/functions/_shared/production.mjs";
 
 test("explanation and planning cannot authorise generation",()=>{
   const plan=buildPlan({workflow:"visual",intent:"plan"});
@@ -66,3 +67,81 @@ test("full editorial rewriting ends with independent reviewer, not an automatic 
  assert.equal(last.agent,"writing_reviewer");
  assert.equal(authorisation({plan,step_key:last.key}).allowed,false);
 });
+
+test("idea to publish runs every stage in order: idea, writing, storyboard, images, motion, video, audit, publishing",()=>{
+ const plan=buildPlan({workflow:"idea_to_publish",intent:"execute",image_count:2,video_count:2});
+ const keys=plan.steps.map(s=>s.key);
+ assert.deepEqual(keys,[
+  "idea_develop","idea_critique","idea_refine",
+  "writing_draft","writing_critique","writing_edit","writing_language_audit","writing_rewrite","writing_proofread","writing_review",
+  "story_storyboard","visual_analysis","visual_select_tool",
+  "visual_prompt_1","visual_generate_1","visual_review_1","visual_prompt_2","visual_generate_2","visual_review_2",
+  "animation_storyboard","animation_motion_plan","animation_select_tool",
+  "animation_generate_1","animation_review_1","animation_generate_2","animation_review_2","animation_assembly",
+  "release_audit","publish_plan","publish_send","publish_verify"
+ ]);
+ const step=key=>plan.steps.find(s=>s.key===key);
+ assert.equal(step("idea_develop").depends_on.length,0);
+ assert.deepEqual(step("writing_draft").depends_on,["idea_refine"]);
+ assert.equal(step("writing_draft").approval_required,true,"The creator approves the idea before writing starts");
+ assert.deepEqual(step("story_storyboard").depends_on,["writing_review"]);
+ assert.deepEqual(step("visual_analysis").depends_on,["story_storyboard"]);
+ assert.deepEqual(step("animation_storyboard").depends_on,["visual_review_2"]);
+ assert.ok(!keys.some(k=>k.startsWith("audio_")),"This workflow does not generate music");
+ assert.deepEqual(step("publish_plan").depends_on,["release_audit"]);
+ assert.equal(step("publish_send").kind,"publish");
+ assert.equal(step("publish_send").approval_required,true);
+ assert.equal(plan.steps.filter(s=>s.kind==="publish").length,1,"Exactly one public action");
+ assert.equal(plan.steps.at(-1).key,"publish_verify");
+});
+test("existing workflows never gain idea or publishing stages",()=>{
+ for(const workflow of ["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video"]){
+  const keys=buildPlan({workflow,intent:"execute",image_count:2,video_count:2}).steps.map(s=>s.key);
+  assert.ok(!keys.some(k=>k.startsWith("idea_")||k.startsWith("publish_")||k==="story_storyboard"),workflow);
+ }
+ assert.equal(buildPlan({workflow:"song_video"}).steps[0].key,"writing_draft");
+ assert.equal(buildPlan({workflow:"song_video"}).steps[0].approval_required,false);
+});
+test("every media and publishing stage in every workflow needs its own approval",()=>{
+ assert.deepEqual([...GATED_KINDS],["image","video","audio","publish"]);
+ for(const workflow of ["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","idea_to_publish"]){
+  for(const s of buildPlan({workflow,intent:"execute",image_count:3,video_count:3}).steps){
+   if(GATED_KINDS.includes(s.kind))assert.equal(s.approval_required,true,workflow+" "+s.key);
+  }
+ }
+});
+test("nothing is published without explicit approval, and revoking stops it",()=>{
+ const plan=buildPlan({workflow:"idea_to_publish",intent:"execute"});
+ const states=Object.fromEntries(plan.steps.map(s=>[s.key,"passed"]));
+ states.publish_send="pending";states.publish_verify="pending";
+ assert.match(authorisation({plan,step_key:"publish_send",states}).reason,/approval/);
+ assert.equal(authorisation({plan,step_key:"publish_send",states,approvals:{publish_send:"revoked"}}).allowed,false);
+ assert.equal(authorisation({plan,step_key:"publish_send",states,approvals:{publish_send:"approved"}}).allowed,true);
+ assert.match(authorisation({plan,step_key:"publish_verify",states}).reason,/Dependency/);
+ assert.equal(authorisation({plan:buildPlan({workflow:"idea_to_publish",intent:"plan"}),step_key:"publish_send",states,approvals:{publish_send:"approved"}}).allowed,false);
+});
+test("writing cannot start in idea to publish until the idea is approved",()=>{
+ const plan=buildPlan({workflow:"idea_to_publish",intent:"execute"});
+ const states={idea_develop:"passed",idea_critique:"passed",idea_refine:"passed"};
+ assert.match(authorisation({plan,step_key:"writing_draft",states}).reason,/approval/);
+ assert.equal(authorisation({plan,step_key:"writing_draft",states,approvals:{writing_draft:"approved"}}).allowed,true);
+});
+test("image size check accepts valid sizes and rejects bad ones",()=>{
+ assert.deepEqual(parseImageSize("1536x864"),{width:1536,height:864});
+ assert.deepEqual(parseImageSize("1024x1024"),{width:1024,height:1024});
+ for(const bad of ["","abc","1536x865","4000x1000","3840x1000","x864","1536 x 864",undefined,null])
+  assert.throws(()=>parseImageSize(bad),/WIDTHxHEIGHT/,String(bad));
+});
+test("a review passes only on an explicit PASS verdict",()=>{
+ for(const ok of ["VERDICT: PASS","VERDICT: PASS\nAll checks met","\n  verdict:pass - fine"])assert.equal(reviewPassed(ok),true,ok);
+ for(const no of ["VERDICT: REPAIR","**VERDICT: PASS**","VERDICT: PASSED","I think VERDICT: PASS","",null,undefined])assert.equal(reviewPassed(no),false,String(no));
+});
+test("orchestrator uses the shared checks and blocks unbuilt publishing",()=>{
+ const src=readFileSync(new URL("../supabase/functions/cbted-orchestrator/index.ts",import.meta.url),"utf8");
+ assert.match(src,/parseImageSize\(size\)/);
+ assert.match(src,/reviewPassed\(result\.text\)/);
+ assert.ok(!src.includes("\\\\d{3,4}")&&!src.includes("\\\\s*PASS"),"No over-escaped regular expressions");
+ assert.match(src,/chosen\.kind==="publish"\|\|chosen\.agent==="publish_verifier"/);
+ assert.match(src,/Only the publishing service can confirm a post/);
+});
+

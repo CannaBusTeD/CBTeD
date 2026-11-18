@@ -26,7 +26,13 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 - The existing `cbted-mcp` Supabase Edge Function was deployed as version 4, with seven added production-management tools alongside its original thirteen. The connected CBTeD plugin successfully returned the full master rulebook **and actual authenticated project records**; plugin tool manifests may need refreshing to reveal the new functions.
 - The new `cbted-orchestrator` Edge Function is deployed. It offers deterministic, project-owned planning and separate authorised stage execution.
 - PostgreSQL tables `production_runs`, `production_steps` and `production_approvals` persist the production plan, specialist work and explicit approvals. Additive migrations have been applied, including a check for **real private Storage objects**, not merely asset metadata, before media stages can pass.
-- The controller defines **23 specialist agent roles** for writing, language-pattern review, image design, audio and video. Only controlled backend text/image adapters are currently implemented; no working audio/video provider or final editor has been verified.
+- The controller defines **30 specialist agent roles** for idea development, writing, language-pattern review, storyboarding, image design, audio, video and publishing. Only controlled backend text/image adapters are currently implemented; no working audio/video provider, final editor or publishing service has been verified.
+- The `idea_to_publish` workflow runs one project from idea to platforms: idea > approved idea > writing > story storyboard > images > motion storyboard > video clips > assembly > release audit > publish.
+  - It is live in the database and the orchestrator as of 18 November 2026.
+  - The MCP connector update is not deployed yet.
+  - Publishing fails closed until the publishing service is built.
+  - Video generation and assembly are not connected yet.
+  - See [orchestration](docs/ORCHESTRATION.md).
 - Planning never authorises generation. Paid backend execution is disabled unless API credentials, model choices, an explicit enable flag and a per-run operation cap are all configured.
 - GitHub contains the canonical source and CI workflows. GitHub-to-Supabase automatic deployment additionally needs `SUPABASE_ACCESS_TOKEN` configured in GitHub Actions.
 - See [orchestration architecture and verification](docs/ORCHESTRATION.md) and [MCP integration](mcp/README.md).
