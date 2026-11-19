@@ -11,3 +11,6 @@ verify_jwt = false # Handler verifies Supabase identity or a restricted review t
 
 [functions.cbted-social-connect]
 verify_jwt = false # Handler validates CBTeD user JWT except for one-time OAuth callback state.
+
+[functions.cbted-media-gate]
+verify_jwt = false # Handler validates CBTeD user JWT and checks job approvals.
