@@ -30,6 +30,7 @@ jobs:
         run: |
           node --check app/app.js
           node --check app/production.js
+          node --check app/project-publishing.mjs
           node --test tests/check-media-credit-policy.mjs
           node --check app/socials.js
           node --test tests/check-social-connect.mjs
