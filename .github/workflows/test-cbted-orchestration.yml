@@ -30,6 +30,7 @@ jobs:
           node --test tests/check-social-oauth.mjs
           node --test tests/check-media-credit-policy.mjs
           node --test tests/check-generation-routing.mjs
+          node --test tests/check-pipeline-branches.mjs
           node --test tests/check-media-gate.mjs
           node --check --input-type=module < supabase/functions/cbted-media-gate/index.ts
           node --check supabase/functions/_shared/social-providers.mjs
