@@ -21,7 +21,7 @@ create table if not exists public.cbted_media_jobs (
  billing_mode text not null default 'credits' check(billing_mode in ('credits','native','free_generation')),
  quote_fingerprint text not null default '',
  status text not null default 'awaiting_quote'
- check(status in ('awaiting_quote','awaiting_approval','ready','approved','claimed','submitted','completed','failed','rejected','cancelled')),
+ check(status in ('awaiting_quote','awaiting_approval','ready','approved','claimed','submitted','needs_review','completed','failed','rejected','cancelled')),
  approval_required boolean not null default true,
  approval_reason text not null default 'Quote required',
  approved_max_credits numeric(12,3),
