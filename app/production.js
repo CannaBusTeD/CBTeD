@@ -1,9 +1,10 @@
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2.118.0";
 import {loadPublicConfig} from "./config.js";
+import {attachProjectPublishing} from "./project-publishing.mjs";
 const $=id=>document.getElementById(id);
 const message=(value,error=false)=>{const e=$("production-status");e.textContent=value;e.classList.toggle("error",error);};
 const node=(tag,txt)=>{const e=document.createElement(tag);e.textContent=txt;return e;};
-let db,config,session,activePreview=null;
+let db,config,session,activePreview=null,publishing=null;
 const backend=path=>config.url+"/functions/v1/cbted-orchestrator/"+path;
 async function signedIn(){
  const r=await db.auth.getSession();if(r.error)throw r.error;
@@ -42,6 +43,7 @@ async function projectChanged(){
  for(const v of versions){const option=node("option",(titles[v.source_id]||"Source")+" version "+v.version_number);option.value=v.id;$("production-source").append(option);}
  await loadRuns();
  await refreshMedia();
+ if(publishing)await publishing.refresh();
 }
 function input(){
  const instructions=$("production-instructions").value.trim();
@@ -125,6 +127,7 @@ async function init(){
  try{
   config=await loadPublicConfig();db=createClient(config.url,config.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   await projects();
+  publishing=attachProjectPublishing({db,config,getSessionToken:signedIn,getProjectId:()=>document.getElementById("production-project").value});
  }catch(e){message(String(e.message||e),true);}
 }
 $("production-form").addEventListener("submit",event=>safe(()=>preview(event)));
