@@ -28,6 +28,9 @@ jobs:
           node --check app/socials.js
           node --test tests/check-social-connect.mjs
           node --test tests/check-social-oauth.mjs
+          node --test tests/check-media-credit-policy.mjs
+          node --test tests/check-media-gate.mjs
+          node --check --input-type=module < supabase/functions/cbted-media-gate/index.ts
           node --check supabase/functions/_shared/social-providers.mjs
           node --check --input-type=module < supabase/functions/cbted-social-connect/index.ts
           node tests/check-cbted-mcp.mjs
