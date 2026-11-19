@@ -46,6 +46,6 @@ begin
   jsonb_build_object('review_note',p_note,'asset_id',v_asset.id,'production_result',v_result));
  return jsonb_build_object('job_id',v_job.id,'status',v_status,
   'asset_id',v_asset.id,'production_stage_result',v_result);
-end $function$;
+end; $function$;
 revoke all on function public.cbted_finish_media_generation(uuid,text,text) from public,anon;
 grant execute on function public.cbted_finish_media_generation(uuid,text,text) to authenticated;
