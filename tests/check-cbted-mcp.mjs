@@ -25,6 +25,9 @@ const fakeFetch=async(url,options={})=>{
       ? new Response(JSON.stringify({id:testUser,email:"tester@example.test"}),{status:200})
       : new Response(JSON.stringify({error:"unauthorized"}),{status:401});
   }
+  if(uri.includes("/functions/v1/cbted-media-gate/jobs")){
+    return new Response(JSON.stringify({jobs:[]}),{status:200});
+  }
   if(uri.includes("/functions/v1/cbted-social-connect/status")){
     return new Response(JSON.stringify({available:false,providers:{youtube:false,facebook:false,instagram:false,tiktok:false,x:false},connections:[],post_requests:[]}),{status:200});
   }
@@ -133,6 +136,16 @@ assert.equal(suggestedFromLink.identified_provider,"facebook");
 assert.equal(suggestedFromLink.profiles.find(x=>x.provider==="facebook").url,"https://www.facebook.com/CannaBusTeD");
 const spoofed=await rpc("tools/call",{name:"cbted_social_suggest_accounts",arguments:{username:"https://www.facebook.com.bad.example/Someone"}},true);
 assert.equal(spoofed.result.isError,true);
+for(const name of ["cbted_media_jobs","cbted_media_prepare","cbted_media_quote","cbted_media_approve",
+ "cbted_media_claim","cbted_media_submitted","cbted_media_reference","cbted_media_import","cbted_media_verify"]){
+ assert.ok(names.includes(name),"Missing CBTeD media handoff action: "+name);
+ assert.ok(list.result.tools.find(t=>t.name===name).securitySchemes.some(x=>x.type==="oauth2"),"Media actions need account authentication");
+}
+const mediaAnonymous=await rpc("tools/call",{name:"cbted_media_jobs",arguments:{project_id:"11111111-1111-4111-8111-111111111111"}});
+assert.equal(mediaAnonymous.result.isError,true);
+const mediaJobs=await rpc("tools/call",{name:"cbted_media_jobs",arguments:{project_id:"11111111-1111-4111-8111-111111111111"}},true);
+assert.equal(mediaJobs.result.isError,false);
+assert.deepEqual(JSON.parse(mediaJobs.result.content[0].text).jobs,[]);
 assert.ok(!names.includes("cbted_create_task")&&!names.includes("cbted_record_output"),"Legacy task APIs must not bypass the production controller");
 for(const mode of ["critique","suggestions","rewrite"]){
  const response=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:mode,has_existing_source:true}},true);

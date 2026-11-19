@@ -33,6 +33,22 @@ const tools = [
   tool("cbted_social_disconnect","Revoke CBTeD's stored local access for one social connection. Do not invoke without an explicit request.",{connection_id:U},["connection_id"],false),
   tool("cbted_social_create_post_draft","Prepare one account-specific finished VIDEO for creator approval. Does NOT publish.",{project_id:U,asset_id:U,connection_id:U,title:S,caption:S,privacy:{type:"string",enum:["private","unlisted","public"]},scheduled_at:S},["project_id","asset_id","connection_id"],false),
   tool("cbted_social_approve_post","Record the creator's explicit approval or rejection of one specific post draft. Actual platform posting requires a separate working verified adapter.",{request_id:U,decision:{type:"string",enum:["approved","rejected"]}},["request_id","decision"],false),
+  tool("cbted_media_jobs","List actual image/video generation requests and pending credit approvals in an owned CBTeD project.",{project_id:U},["project_id"],true),
+  tool("cbted_media_prepare","Prepare one GPT native image, Runway or Higgsfield image/video generation. Register the prompt and project only; no generation starts. Connectors must supply a real quote before paid media generation.",{
+    project_id:U,run_id:U,step_key:S,provider:{type:"string",enum:["chatgpt","runway","higgsfield"]},
+    kind:{type:"string",enum:["image","video"]},model:S,prompt:S,aspect_ratio:S,duration:{type:"integer",minimum:1,maximum:120},
+    source_asset_id:U},["project_id","provider","kind","prompt"],false),
+  tool("cbted_media_quote","Record exact credits from a real connected provider cost estimate, and subscription-INCLUDED credits from a live provider balance. Purchased/total credits do not count as included. An uncertain or over-allowance quote must wait for creator approval.",{
+    job_id:U,estimated_credits:{type:"number",minimum:0},billing_mode:{type:"string",enum:["credits","free_generation"]},
+    included_remaining:{type:"number",minimum:0},allowance_source:{type:"string",enum:["unknown","provider_tool","user_entered"]},observed_at:S},["job_id","estimated_credits"],false),
+  tool("cbted_media_approve","Record one explicit creator approval or rejection for one precise quoted image/video generation credit cost. Only use after the creator authorises this exact job and amount.",{
+    job_id:U,decision:{type:"string",enum:["approved","rejected"]},max_credits:{type:"number",minimum:0}},["job_id","decision"],false),
+  tool("cbted_media_claim","Check and atomically claim a previously quoted, within-allowance OR specifically approved job before actually invoking Runway, Higgsfield or ChatGPT images. A successful claim authorises ONLY this exact quoted job.",{job_id:U},["job_id"],false),
+  tool("cbted_media_submitted","After actual provider generation submission, record the genuine Runway/Higgsfield task id. Does not prove that media has finished rendering.",{job_id:U,provider_job_id:S},["job_id","provider_job_id"],false),
+  tool("cbted_media_reference","Get a short-lived signed URL for a real, private, project-owned source image. Pass it to Runway/Higgsfield as an image reference; never describe a prompt as a stored file.",{project_id:U,asset_id:U},["project_id","asset_id"],true),
+  tool("cbted_media_import","After provider actually finishes rendering and supplies a verifiable HTTPS result URL, safely import the real media into private CBTeD project storage. Only configured provider media hosts are accepted.",{job_id:U,result_url:S},["job_id","result_url"],false),
+  tool("cbted_media_verify","Record actual creative inspection of a stored image/video. Do not claim PASS without inspecting the returned media and project rules.",{
+    job_id:U,decision:{type:"string",enum:["passed","failed"]},review_note:S},["job_id","decision","review_note"],false),
   tool("cbted_route_task","CBTeD ChatGPT-native coordinator: classify a targeted creative request into independent specialist stages. Does NOT create a run, invoke generation, require the website or demand unrelated studios. For a verse edit, select editorial; for video from existing song and image, select video_from_assets.",{intent:{type:"string",enum:["critique","suggestions","line_edit","editorial","rewrite","new_song","verse","images","audio","video_from_assets","video_from_idea","complete"]},previous_intent:{type:"string"},has_existing_source:{type:"boolean"},has_image:{type:"boolean"},has_audio:{type:"boolean"},image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["intent"],true),
   tool("cbted_plan_production","Plan a CBTeD workflow without generating content. intent=plan is read-only; intent=execute persists a new run but does not start any agents.",{project_id:U,workflow:{type:"string",enum:["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","idea_to_publish","plan_only"]},intent:{type:"string",enum:["plan","execute"]},instructions:S,source_version_id:U,image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["workflow","intent"],false),
   tool("cbted_get_production_status","Read an owned production run, every atomic step and its explicit approval decisions.",{run_id:U},["run_id"],true),
@@ -107,6 +123,22 @@ async function rest(token,table,query={},method="GET",body=null){
 }
 const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
+ const mediaActions={
+  cbted_media_jobs:"jobs",cbted_media_prepare:"prepare",cbted_media_quote:"quote",
+  cbted_media_approve:"approve",cbted_media_claim:"claim",cbted_media_submitted:"submitted",
+  cbted_media_reference:"reference",cbted_media_import:"import",cbted_media_verify:"verify"
+ };
+ if(Object.prototype.hasOwnProperty.call(mediaActions,name)){
+  const action=mediaActions[name],isGet=name==="cbted_media_jobs";
+  const endpoint=SUPABASE_URL+"/functions/v1/cbted-media-gate/"+action+
+   (isGet?"?project_id="+encodeURIComponent(a.project_id):"");
+  const resp=await fetch(endpoint,{method:isGet?"GET":"POST",
+   headers:{"apikey":publishableKey(),"Authorization":"Bearer "+token,...(isGet?{}:{"Content-Type":"application/json"})},
+   ...(isGet?{}:{body:JSON.stringify(a)})});
+  let data;try{data=await resp.json()}catch{throw Error("CBTeD Media Gate returned an invalid response");}
+  if(!resp.ok)throw Error("Generation blocked: "+String(data.error||"Media Gate unavailable").slice(0,260));
+  return data;
+ }
 
  if(name==="cbted_social_suggest_accounts"){
    const input=String(a.username||"").trim();

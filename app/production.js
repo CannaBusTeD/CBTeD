@@ -41,6 +41,7 @@ async function projectChanged(){
  const titles=Object.fromEntries(sources.map(x=>[x.id,x.title]));
  for(const v of versions){const option=node("option",(titles[v.source_id]||"Source")+" version "+v.version_number);option.value=v.id;$("production-source").append(option);}
  await loadRuns();
+ await refreshMedia();
 }
 function input(){
  const instructions=$("production-instructions").value.trim();
@@ -135,4 +136,95 @@ $("run-next").addEventListener("click",()=>safe(next));
 for(const id of ["production-source","production-workflow","production-images","production-videos","production-instructions"]){
  $(id).addEventListener("input",()=>{$("create-production").disabled=true;activePreview=null;});
 }
+
+const mediaEndpoint=path=>config.url+"/functions/v1/cbted-media-gate/"+path;
+async function mediaCall(path,body){
+ const token=await signedIn();
+ const response=await fetch(mediaEndpoint(path),{
+  method:body?"POST":"GET",
+  headers:{Authorization:"Bearer "+token,apikey:config.publishableKey,...(body?{"Content-Type":"application/json"}:{})},
+  ...(body?{body:JSON.stringify(body)}:{})
+ });
+ let data;try{data=await response.json()}catch{throw Error("Media generator service returned an invalid response");}
+ if(!response.ok)throw Error(data.error||"Media generation request was refused");
+ return data;
+}
+const mediaStatus=(value,error=false)=>{$("media-generation-status").textContent=value;$("media-generation-status").classList.toggle("error",error);};
+function mediaButton(label,act){
+ const b=node("button",label);b.type="button";b.className="secondary";
+ b.addEventListener("click",async()=>{
+  b.disabled=true;
+  try{await act();await refreshMedia();}
+  catch(e){mediaStatus(String(e.message||e),true);b.disabled=false;}
+ });
+ return b;
+}
+async function refreshMedia(){
+ const pid=$("production-project").value;
+ const list=$("media-jobs");list.replaceChildren();
+ const files=$("media-source");files.replaceChildren(node("option","Start from an idea (no reference image)"));files.firstChild.value="";
+ if(!pid){mediaStatus("Choose one of your projects before preparing a generation.");return;}
+ let data,assets;
+ try{
+  [data,assets]=await Promise.all([
+   mediaCall("jobs?project_id="+encodeURIComponent(pid)),
+   dbQuery(db.from("assets").select("id,filename,mime_type").eq("project_id",pid).order("created_at",{ascending:false}).limit(100))
+  ]);
+ }catch(e){mediaStatus(String(e.message||e),true);return;}
+ for(const a of assets||[])if(String(a.mime_type||"").startsWith("image/")){
+  const op=node("option",a.filename||"Saved project image");op.value=a.id;files.append(op);
+ }
+ const jobs=data.jobs||[];
+ if(!jobs.length)list.append(node("li","No generation requests saved in this project."));
+ for(const j of jobs){
+  const li=node("li");
+  const heading=node("strong",j.provider+" "+j.kind+" · "+(j.model||"auto model")+" · "+j.status);
+  li.append(heading);
+  const p=node("p",j.prompt.length>160?j.prompt.slice(0,160)+"…":j.prompt);li.append(p);
+  const quote=j.quote_credits==null?"Provider quote required":Number(j.quote_credits)+" credits";
+  const included=j.allowance_included_remaining==null?"monthly included allowance not confirmed":Number(j.allowance_included_remaining)+" confirmed monthly-included credits before other jobs";
+  const cost=node("p","Credit check: "+quote+". "+included+". "+(j.approval_reason||""));
+  cost.className="hint";li.append(cost);
+  if(j.status==="awaiting_quote")li.append(node("p","Waiting for an exact quote from the connected generator. CBTeD will not start this job without it."));
+  if(j.status==="awaiting_approval"&&j.quote_credits!=null){
+   const n=Number(j.quote_credits);
+   li.append(mediaButton("Approve "+n+" credits for this "+j.kind,async()=>{
+    await mediaCall("approve",{job_id:j.id,decision:"approved",max_credits:n});
+    mediaStatus("Approved only this exact generation quote. No media has been generated yet.");
+   }));
+   li.append(mediaButton("Reject credit spend",async()=>{
+    await mediaCall("approve",{job_id:j.id,decision:"rejected"});
+    mediaStatus("Generation rejected. No credits were spent.");
+   }));
+  }
+  if(j.status==="ready")li.append(node("p","Ready within the confirmed allowance. Ask CBTeD in ChatGPT to generate this project job."));
+  if(j.status==="approved")li.append(node("p","Exact credit quote approved. CBTeD can start this job once through the connected generator."));
+  if(j.status==="submitted")li.append(node("p","Provider generation submitted. Awaiting a verified media file."));
+  if(j.status==="needs_review")li.append(node("p","Image/video file saved privately. Review the actual media before marking it complete."));
+  if(j.status==="completed")li.append(node("p","Saved media passed its project review."));
+  list.append(li);
+ }
+ mediaStatus("Loaded "+jobs.length+" generation requests for this project. Paid jobs are blocked until their credit conditions are met.");
+}
+async function prepareMedia(event){
+ event.preventDefault();
+ const project_id=$("production-project").value;
+ if(!project_id)throw Error("Select a CBTeD project above");
+ const provider=$("media-provider").value,kind=$("media-kind").value;
+ if(provider==="chatgpt"&&kind!=="image")throw Error("Choose Runway or Higgsfield for generated video");
+ const payload={project_id,provider,kind,model:$("media-model").value.trim()||undefined,
+  prompt:$("media-prompt").value.trim(),aspect_ratio:$("media-aspect").value,
+  ...(kind==="video"?{duration:Number($("media-duration").value)}:{}),
+  source_asset_id:$("media-source").value||undefined};
+ if(!payload.prompt)throw Error("Describe what you want to create");
+ const answer=await mediaCall("prepare",payload);
+ mediaStatus("Generation prepared: "+answer.credit_decision.reason+". The project approval controls are shown below.");
+ await refreshMedia();
+}
+$("media-generation-form").addEventListener("submit",event=>safe(()=>prepareMedia(event)));
+$("refresh-media").addEventListener("click",()=>safe(refreshMedia));
+$("media-provider").addEventListener("change",()=>{
+ if($("media-provider").value==="chatgpt")$("media-kind").value="image";
+});
+
 await init();

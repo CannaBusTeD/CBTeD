@@ -64,6 +64,46 @@
   <div class="actions"><button type="button" id="run-next">Execute one authorised stage</button></div>
   <p id="execution-result" role="status" aria-live="polite"></p>
  </section>
+ <section class="panel" aria-labelledby="media-jobs-heading">
+  <h2 id="media-jobs-heading">4. Image and video generators</h2>
+  <p>Choose GPT Images inside ChatGPT, Runway, or Higgsfield. CBTeD records the request and waits for a real provider quote and result. Approved project images can be passed directly into either video service.</p>
+  <form id="media-generation-form">
+   <div class="fields">
+    <label for="media-provider">Generator
+     <select id="media-provider" required>
+      <option value="chatgpt">ChatGPT native images (no external credits)</option>
+      <option value="runway">Runway</option>
+      <option value="higgsfield">Higgsfield</option>
+     </select>
+    </label>
+    <label for="media-kind">Make
+     <select id="media-kind"><option value="image">One image</option><option value="video">One video clip</option></select>
+    </label>
+    <label for="media-model">Model (optional)
+     <input id="media-model" placeholder="The model chosen in the connected tool" maxlength="100">
+    </label>
+    <label for="media-aspect">Aspect ratio
+     <select id="media-aspect"><option value="16:9">16:9 landscape</option><option value="9:16">9:16 portrait</option><option value="1:1">1:1 square</option><option value="auto">Automatic</option></select>
+    </label>
+    <label for="media-duration">Video length, seconds
+     <input id="media-duration" type="number" min="1" max="120" value="10">
+    </label>
+    <label for="media-source">Use an approved existing image (optional)
+     <select id="media-source"><option value="">Start from text only</option></select>
+    </label>
+   </div>
+   <label for="media-prompt">What would you like CBTeD to create?
+    <textarea id="media-prompt" rows="4" maxlength="20000" placeholder="Describe the image or video. Skip any earlier studio you don't need." required></textarea>
+   </label>
+   <button type="submit">Prepare this generation</button>
+  </form>
+  <p id="media-generation-status" role="status" aria-live="polite">Select a project above to see its generation requests.</p>
+  <h3 id="credit-approvals-heading">Credit checks and approvals</h3>
+  <p>CBTeD uses the provider's current monthly-included balance, not purchased or extra credits. If that included balance cannot be verified, it asks before spending. No extra credits are spent without approval.</p>
+  <div class="actions"><button type="button" id="refresh-media" class="secondary">Refresh generation requests</button></div>
+  <ul id="media-jobs" class="clean-list" aria-labelledby="credit-approvals-heading"></ul>
+  <p class="hint">The actual generation happens through your connected ChatGPT, Runway or Higgsfield tools. A prepared request is not a rendered image or video.</p>
+ </section>
 </main>
 <footer class="container footer">CBTeD. Original sources and approvals are never silently overwritten.</footer>
 </body>
