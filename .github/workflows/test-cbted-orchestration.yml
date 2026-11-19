@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,8 +39,6 @@ jobs:
           node --test tests/check-oauth-callbacks.mjs
       - name: Render and verify a real local MP4 with music in FFmpeg
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
           ffmpeg -version
           python3 tests/test_assembly.py
       - name: Verify live orchestrator and refusal of unauthorised requests
