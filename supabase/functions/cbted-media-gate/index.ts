@@ -102,7 +102,7 @@ async function prepare(user,body){
   if(runs?.length!==1)throw Error("Production run not found in project");
  }
  if(body.source_asset_id)await ownedAsset(projectId,body.source_asset_id,"image");
- const settings={aspect_ratio:spec.aspect_ratio,count:1,...(spec.kind==="video"&&spec.duration?{duration:spec.duration}:{})};
+ const settings={aspect_ratio:spec.aspect_ratio,count:1,...((spec.kind==="video"||spec.kind==="audio")&&spec.duration?{duration:spec.duration}:{})};
  const quote=cleanQuote(body,spec.provider);
  const draft={owner_id:user,project_id:projectId,run_id:body.run_id||null,
   step_key:typeof body.step_key==="string"?body.step_key.slice(0,120):null,
@@ -184,7 +184,11 @@ function mediaType(bytes,type){
  if(type==="image/webp"&&String.fromCharCode(...bytes.slice(0,4))==="RIFF"&&String.fromCharCode(...bytes.slice(8,12))==="WEBP")return "webp";
  if(type==="video/mp4"&&String.fromCharCode(...bytes.slice(4,8))==="ftyp")return "mp4";
  if(type==="video/webm"&&bytes[0]===26&&bytes[1]===69&&bytes[2]===223&&bytes[3]===163)return "webm";
- throw Error("Returned media does not match a supported image/video file signature");
+ if(type==="audio/mpeg"&&bytes.length>1024&&(String.fromCharCode(...bytes.slice(0,3))==="ID3"||(bytes[0]===255&&(bytes[1]&224)===224)))return "mp3";
+ if((type==="audio/wav"||type==="audio/x-wav")&&bytes.length>44&&
+  String.fromCharCode(...bytes.slice(0,4))==="RIFF"&&String.fromCharCode(...bytes.slice(8,12))==="WAVE")return "wav";
+ if(type==="audio/mp4"&&bytes.length>16&&String.fromCharCode(...bytes.slice(4,8))==="ftyp")return "m4a";
+ throw Error("Returned media does not match a supported image/video/audio file signature");
 }
 async function importResult(user,body){
  const job=await ownedJob(user,body.job_id);
@@ -195,7 +199,7 @@ async function importResult(user,body){
  if(!remote.ok)throw Error("Provider media could not be downloaded");
  const type=String(remote.headers.get("content-type")||"").split(";")[0].toLowerCase();
  if(!type.startsWith(job.kind+"/"))throw Error("Provider returned wrong media type");
- const limit=job.kind==="image"?25000000:80000000;
+ const limit=job.kind==="image"?25000000:job.kind==="audio"?45000000:80000000;
  const declared=Number(remote.headers.get("content-length")||0);
  if(declared>limit)throw Error("Generated file exceeds safe import size");
  const data=new Uint8Array(await remote.arrayBuffer());
