@@ -239,7 +239,8 @@ async function verify(user,body){
 async function reference(user,body){
  const project=requiredId(body.project_id,"project");
  await ownedProject(user,project);
- const asset=await ownedAsset(project,body.asset_id,"image");
+ const kind=["image","video","audio"].includes(body.kind)?body.kind:"image";
+ const asset=await ownedAsset(project,body.asset_id,kind);
  if(!asset.storage_path||asset.storage_path.includes(".."))throw Error("Invalid stored asset path");
  const res=await fetch(ROOT+"/storage/v1/object/sign/"+BUCKET+"/"+asset.storage_path,{method:"POST",
   headers:{apikey:SERVICE,Authorization:"Bearer "+SERVICE,"Content-Type":"application/json"},
@@ -247,8 +248,10 @@ async function reference(user,body){
  if(!res.ok)throw Error("Cannot sign the private approved reference image");
  const data=await res.json(),link=data.signedURL||data.signedUrl;
  if(!link)throw Error("Reference image URL not returned");
- return {project_id:project,asset_id:asset.id,media_type:asset.mime_type,expires_in_seconds:900,
-  temporary_image_url:link.startsWith("http")?link:ROOT+"/storage/v1"+(link.startsWith("/")?link:"/"+link)};
+ const temporary=link.startsWith("http")?link:ROOT+"/storage/v1"+(link.startsWith("/")?link:"/"+link);
+ return {project_id:project,asset_id:asset.id,media_type:asset.mime_type,
+  expires_in_seconds:900,temporary_asset_url:temporary,
+  ...(kind==="image"?{temporary_image_url:temporary}:{})};
 }
 Deno.serve(async(request)=>{
  if(request.method==="OPTIONS")return new Response(null,{status:204,headers:COMMON});
