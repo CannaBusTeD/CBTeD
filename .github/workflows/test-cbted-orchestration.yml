@@ -37,6 +37,10 @@ jobs:
           node --check --input-type=module < supabase/functions/cbted-social-connect/index.ts
           node tests/check-cbted-mcp.mjs
           node --test tests/check-oauth-callbacks.mjs
+      - name: Render and verify a real local MP4 with music in FFmpeg
+        run: |
+          ffmpeg -version
+          python3 tests/test_assembly.py
       - name: Verify live orchestrator and refusal of unauthorised requests
         run: node tests/check-orchestrator-live.mjs
       - name: Verify external review rejects unauthenticated access
