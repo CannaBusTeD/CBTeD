@@ -86,7 +86,7 @@ function cleanQuote(body,provider){
  const observed=source==="provider_tool"&&typeof body.observed_at==="string"?new Date(body.observed_at):null;
  const observedAt=observed&&Number.isFinite(+observed)?observed.toISOString():null;
  return {quote_credits:quote??null,billing_mode:billing,quote_observed_at:quote!=null?new Date().toISOString():null,
-  allowance_included_remaining:included??null,allowance_source:source,allowance_observed_at:observedAt};
+  allowance_included_remaining:billing==="free_generation"&&quote===0&&source==="provider_tool"?0:(included??null),allowance_source:source,allowance_observed_at:observedAt};
 }
 async function prepare(user,body){
  const projectId=requiredId(body.project_id,"project");await ownedProject(user,projectId);
