@@ -110,6 +110,37 @@
   <ul id="media-jobs" class="clean-list" aria-labelledby="credit-approvals-heading"></ul>
   <p class="hint">The actual generation happens through your connected ChatGPT, Runway or Higgsfield tools. A prepared request is not a rendered image or video.</p>
  </section>
+ <section class="panel" aria-labelledby="publishing-project-heading">
+  <h2 id="publishing-project-heading">5. Prepare and approve social posts</h2>
+  <p>Choose a real saved video and one of your authorised social accounts. CBTeD prepares one post per destination and asks for your approval. Publishing itself remains disabled until each platform's sending connection has passed a real delivery test.</p>
+  <p><a href="./socials.html">Connect or manage your social accounts</a></p>
+  <form id="project-publish-form">
+   <div class="fields">
+    <label for="publish-asset">Saved project video
+      <select id="publish-asset" required><option value="">Select a real video file</option></select>
+    </label>
+    <label for="publish-connection">Authorised destination
+      <select id="publish-connection" required><option value="">Connect an account first</option></select>
+    </label>
+    <label for="publish-privacy">Visibility
+      <select id="publish-privacy"><option value="private">Private / draft</option><option value="unlisted">Unlisted (where supported)</option><option value="public">Public after separate approval</option></select>
+    </label>
+    <label for="publish-scheduled">Schedule (optional, local time)
+      <input id="publish-scheduled" type="datetime-local">
+    </label>
+   </div>
+   <label for="publish-title">Post title
+    <input id="publish-title" maxlength="200" placeholder="Title of the finished production" required>
+   </label>
+   <label for="publish-caption">Caption and hashtags
+    <textarea id="publish-caption" rows="4" maxlength="2200" placeholder="Write the caption for this destination."></textarea>
+   </label>
+   <button type="submit">Prepare post for approval</button>
+  </form>
+  <p id="publishing-project-status" role="status" aria-live="polite">Select a project to see its pending posts.</p>
+  <div class="actions"><button type="button" id="refresh-publishing" class="secondary">Refresh posts and connected accounts</button></div>
+  <ul id="publishing-project-requests" class="clean-list"></ul>
+ </section>
 </main>
 <footer class="container footer">CBTeD. Original sources and approvals are never silently overwritten.</footer>
 </body>
