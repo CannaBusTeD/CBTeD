@@ -82,11 +82,13 @@ function cleanQuote(body,provider){
  if(!allowedModes.has(billing))throw Error("Invalid provider billing mode");
  const included=body.included_remaining;
  if(included!=null&&(!number(included)||included>1000000))throw Error("Invalid monthly included allowance");
- const source=body.allowance_source==="provider_tool"?"provider_tool":body.allowance_source==="user_entered"?"user_entered":"unknown";
- const observed=source==="provider_tool"&&typeof body.observed_at==="string"?new Date(body.observed_at):null;
- const observedAt=observed&&Number.isFinite(+observed)?observed.toISOString():null;
+ // Caller-supplied provider_tool provenance is NOT trusted. The user's separate ChatGPT
+ // connectors do not grant this Supabase service authenticated provider-balance access.
+ // Until a backend-verifiable provider receipt exists, external generation is never auto-spent.
+ // A real quote from a connected provider may still be approved by the creator for one job.
+ const source=body.allowance_source==="user_entered"?"user_entered":"unknown";
  return {quote_credits:quote??null,billing_mode:billing,quote_observed_at:quote!=null?new Date().toISOString():null,
-  allowance_included_remaining:billing==="free_generation"&&quote===0&&source==="provider_tool"?0:(included??null),allowance_source:source,allowance_observed_at:observedAt};
+  allowance_included_remaining:included??null,allowance_source:source,allowance_observed_at:null};
 }
 async function prepare(user,body){
  const projectId=requiredId(body.project_id,"project");await ownedProject(user,projectId);
