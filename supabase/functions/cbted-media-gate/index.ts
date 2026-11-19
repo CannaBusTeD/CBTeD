@@ -9,7 +9,7 @@ const PUB=(()=>{const v=Deno.env.get("SUPABASE_PUBLISHABLE_KEY")||Deno.env.get("
 const BUCKET="cbted-project-assets";
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const COMMON={"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type","access-control-allow-methods":"GET,POST,OPTIONS"};
-const VALID_TABLES=new Set(["projects","assets","production_runs","cbted_media_jobs","cbted_media_job_events"]);
+const VALID_TABLES=new Set(["projects","assets","production_runs","production_steps","cbted_media_jobs","cbted_media_job_events"]);
 function result(data,status=200){return new Response(JSON.stringify(data),{status,headers:COMMON});}
 const requiredId=(x,label)=>{if(!UUID.test(String(x||"")))throw Error("Invalid "+label);return x;};
 const number=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0;
@@ -82,11 +82,13 @@ function cleanQuote(body,provider){
  if(!allowedModes.has(billing))throw Error("Invalid provider billing mode");
  const included=body.included_remaining;
  if(included!=null&&(!number(included)||included>1000000))throw Error("Invalid monthly included allowance");
- const source=body.allowance_source==="provider_tool"?"provider_tool":body.allowance_source==="user_entered"?"user_entered":"unknown";
- const observed=source==="provider_tool"&&typeof body.observed_at==="string"?new Date(body.observed_at):null;
- const observedAt=observed&&Number.isFinite(+observed)?observed.toISOString():null;
+ // Caller-supplied provider_tool provenance is NOT trusted. The user's separate ChatGPT
+ // connectors do not grant this Supabase service authenticated provider-balance access.
+ // Until a backend-verifiable provider receipt exists, external generation is never auto-spent.
+ // A real quote from a connected provider may still be approved by the creator for one job.
+ const source=body.allowance_source==="user_entered"?"user_entered":"unknown";
  return {quote_credits:quote??null,billing_mode:billing,quote_observed_at:quote!=null?new Date().toISOString():null,
-  allowance_included_remaining:billing==="free_generation"&&quote===0&&source==="provider_tool"?0:(included??null),allowance_source:source,allowance_observed_at:observedAt};
+  allowance_included_remaining:included??null,allowance_source:source,allowance_observed_at:null};
 }
 async function prepare(user,body){
  const projectId=requiredId(body.project_id,"project");await ownedProject(user,projectId);
@@ -98,9 +100,15 @@ async function prepare(user,body){
   requiredId(body.run_id,"run");
   const runs=await db("production_runs","GET",{id:"eq."+body.run_id,project_id:"eq."+projectId,limit:"1"});
   if(runs?.length!==1)throw Error("Production run not found in project");
+  const stepKey=String(body.step_key||"");
+  if(!/^[a-z][a-z0-9_]{2,119}$/.test(stepKey))throw Error("A valid stage key is required for this production run");
+  const stages=await db("production_steps","GET",{run_id:"eq."+body.run_id,project_id:"eq."+projectId,
+    step_key:"eq."+stepKey,select:"step_key,kind,status,approval_required",limit:"1"});
+  if(stages?.length!==1||stages[0].kind!==spec.kind||!["pending","in_progress"].includes(stages[0].status))
+   throw Error("The linked production stage must be a matching pending or claimed media operation");
  }
  if(body.source_asset_id)await ownedAsset(projectId,body.source_asset_id,"image");
- const settings={aspect_ratio:spec.aspect_ratio,count:1,...(spec.kind==="video"&&spec.duration?{duration:spec.duration}:{})};
+ const settings={aspect_ratio:spec.aspect_ratio,count:1,...((spec.kind==="video"||spec.kind==="audio")&&spec.duration?{duration:spec.duration}:{})};
  const quote=cleanQuote(body,spec.provider);
  const draft={owner_id:user,project_id:projectId,run_id:body.run_id||null,
   step_key:typeof body.step_key==="string"?body.step_key.slice(0,120):null,
@@ -148,6 +156,12 @@ async function decide(user,body){
 }
 async function claim(user,body){
  const job=await ownedJob(user.id,body.job_id);
+ if(job.run_id){
+  const steps=await db("production_steps","GET",{run_id:"eq."+job.run_id,project_id:"eq."+job.project_id,
+    step_key:"eq."+job.step_key,select:"status,kind",limit:"1"});
+  if(steps?.length!==1||steps[0].status!=="in_progress"||steps[0].kind!==job.kind)
+   throw Error("Claim and approve the linked production stage before spending generator credits");
+ }
  const response=await fetch(ROOT+"/rest/v1/rpc/cbted_claim_media_job",{method:"POST",
   headers:{apikey:PUB,Authorization:"Bearer "+user.token,"content-type":"application/json"},
   body:JSON.stringify({p_job:job.id})});
@@ -182,7 +196,11 @@ function mediaType(bytes,type){
  if(type==="image/webp"&&String.fromCharCode(...bytes.slice(0,4))==="RIFF"&&String.fromCharCode(...bytes.slice(8,12))==="WEBP")return "webp";
  if(type==="video/mp4"&&String.fromCharCode(...bytes.slice(4,8))==="ftyp")return "mp4";
  if(type==="video/webm"&&bytes[0]===26&&bytes[1]===69&&bytes[2]===223&&bytes[3]===163)return "webm";
- throw Error("Returned media does not match a supported image/video file signature");
+ if(type==="audio/mpeg"&&bytes.length>1024&&(String.fromCharCode(...bytes.slice(0,3))==="ID3"||(bytes[0]===255&&(bytes[1]&224)===224)))return "mp3";
+ if((type==="audio/wav"||type==="audio/x-wav")&&bytes.length>44&&
+  String.fromCharCode(...bytes.slice(0,4))==="RIFF"&&String.fromCharCode(...bytes.slice(8,12))==="WAVE")return "wav";
+ if(type==="audio/mp4"&&bytes.length>16&&String.fromCharCode(...bytes.slice(4,8))==="ftyp")return "m4a";
+ throw Error("Returned media does not match a supported image/video/audio file signature");
 }
 async function importResult(user,body){
  const job=await ownedJob(user,body.job_id);
@@ -193,7 +211,7 @@ async function importResult(user,body){
  if(!remote.ok)throw Error("Provider media could not be downloaded");
  const type=String(remote.headers.get("content-type")||"").split(";")[0].toLowerCase();
  if(!type.startsWith(job.kind+"/"))throw Error("Provider returned wrong media type");
- const limit=job.kind==="image"?25000000:80000000;
+ const limit=job.kind==="image"?25000000:job.kind==="audio"?45000000:80000000;
  const declared=Number(remote.headers.get("content-length")||0);
  if(declared>limit)throw Error("Generated file exceeds safe import size");
  const data=new Uint8Array(await remote.arrayBuffer());
@@ -217,23 +235,27 @@ async function importResult(user,body){
  return {job_id:job.id,status:"needs_review",asset_id:record.id,bytes:data.byteLength,
   message:"Real private media saved. Creative review required before completion."};
 }
-async function verify(user,body){
- const job=await ownedJob(user,body.job_id);
+async function verify(account,body){
+ const job=await ownedJob(account.id,body.job_id);
  if(job.status!=="needs_review"||!job.result_asset_id)throw Error("No imported media is awaiting review");
  const note=String(body.review_note||"").trim();
- if(note.length<15||note.length>2000)throw Error("Provide a specific review note about the actual image or video");
+ if(note.length<15||note.length>2000)throw Error("Provide a specific review note about the actual image/audio/video");
  if(!["passed","failed"].includes(body.decision))throw Error("Choose passed or failed");
- await ownedAsset(job.project_id,job.result_asset_id,job.kind);
- const status=body.decision==="passed"?"completed":"failed";
- await db("cbted_media_jobs","PATCH",{id:"eq."+job.id,owner_id:"eq."+user,status:"eq.needs_review"},
-  {status,updated_at:new Date().toISOString(),failure_reason:status==="failed"?note:null});
- await audit(user,job.id,"review_"+body.decision,{note,asset_id:job.result_asset_id});
- return {status,job_id:job.id,asset_id:job.result_asset_id};
+ // This user-scoped SQL function atomically updates both the media job and
+ // its linked production stage, verifying a private stored asset exists.
+ const endpoint=ROOT+"/rest/v1/rpc/cbted_finish_media_generation";
+ const r=await fetch(endpoint,{method:"POST",headers:{
+  apikey:PUB,Authorization:"Bearer "+account.token,"content-type":"application/json"},
+  body:JSON.stringify({p_job:job.id,p_decision:body.decision,p_note:note})});
+ let data;try{data=await r.json()}catch{throw Error("Media review response was invalid");}
+ if(!r.ok)throw Error("Media review rejected: "+String(data.message||data.error||"Stage not complete").slice(0,240));
+ return data;
 }
 async function reference(user,body){
  const project=requiredId(body.project_id,"project");
  await ownedProject(user,project);
- const asset=await ownedAsset(project,body.asset_id,"image");
+ const kind=["image","video","audio"].includes(body.kind)?body.kind:"image";
+ const asset=await ownedAsset(project,body.asset_id,kind);
  if(!asset.storage_path||asset.storage_path.includes(".."))throw Error("Invalid stored asset path");
  const res=await fetch(ROOT+"/storage/v1/object/sign/"+BUCKET+"/"+asset.storage_path,{method:"POST",
   headers:{apikey:SERVICE,Authorization:"Bearer "+SERVICE,"Content-Type":"application/json"},
@@ -241,8 +263,10 @@ async function reference(user,body){
  if(!res.ok)throw Error("Cannot sign the private approved reference image");
  const data=await res.json(),link=data.signedURL||data.signedUrl;
  if(!link)throw Error("Reference image URL not returned");
- return {project_id:project,asset_id:asset.id,media_type:asset.mime_type,expires_in_seconds:900,
-  temporary_image_url:link.startsWith("http")?link:ROOT+"/storage/v1"+(link.startsWith("/")?link:"/"+link)};
+ const temporary=link.startsWith("http")?link:ROOT+"/storage/v1"+(link.startsWith("/")?link:"/"+link);
+ return {project_id:project,asset_id:asset.id,media_type:asset.mime_type,
+  expires_in_seconds:900,temporary_asset_url:temporary,
+  ...(kind==="image"?{temporary_image_url:temporary}:{})};
 }
 Deno.serve(async(request)=>{
  if(request.method==="OPTIONS")return new Response(null,{status:204,headers:COMMON});
@@ -266,7 +290,7 @@ Deno.serve(async(request)=>{
   if(action==="claim")return result(await claim(user,body));
   if(action==="submitted")return result(await submitted(user.id,body));
   if(action==="import")return result(await importResult(user.id,body));
-  if(action==="verify")return result(await verify(user.id,body));
+  if(action==="verify")return result(await verify(user,body));
   if(action==="reference")return result(await reference(user.id,body));
   return result({error:"Unknown media action"},404);
  }catch(e){

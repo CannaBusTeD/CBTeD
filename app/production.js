@@ -1,9 +1,10 @@
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2.118.0";
 import {loadPublicConfig} from "./config.js";
+import {attachProjectPublishing} from "./project-publishing.mjs";
 const $=id=>document.getElementById(id);
 const message=(value,error=false)=>{const e=$("production-status");e.textContent=value;e.classList.toggle("error",error);};
 const node=(tag,txt)=>{const e=document.createElement(tag);e.textContent=txt;return e;};
-let db,config,session,activePreview=null;
+let db,config,session,activePreview=null,publishing=null;
 const backend=path=>config.url+"/functions/v1/cbted-orchestrator/"+path;
 async function signedIn(){
  const r=await db.auth.getSession();if(r.error)throw r.error;
@@ -42,6 +43,7 @@ async function projectChanged(){
  for(const v of versions){const option=node("option",(titles[v.source_id]||"Source")+" version "+v.version_number);option.value=v.id;$("production-source").append(option);}
  await loadRuns();
  await refreshMedia();
+ if(publishing)await publishing.refresh();
 }
 function input(){
  const instructions=$("production-instructions").value.trim();
@@ -125,6 +127,7 @@ async function init(){
  try{
   config=await loadPublicConfig();db=createClient(config.url,config.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   await projects();
+  publishing=attachProjectPublishing({db,config,getSessionToken:signedIn,getProjectId:()=>document.getElementById("production-project").value});
  }catch(e){message(String(e.message||e),true);}
 }
 $("production-form").addEventListener("submit",event=>safe(()=>preview(event)));
@@ -211,10 +214,11 @@ async function prepareMedia(event){
  const project_id=$("production-project").value;
  if(!project_id)throw Error("Select a CBTeD project above");
  const provider=$("media-provider").value,kind=$("media-kind").value;
- if(provider==="chatgpt"&&kind!=="image")throw Error("Choose Runway or Higgsfield for generated video");
+ if(provider==="chatgpt"&&kind!=="image")throw Error("Choose Runway, Higgsfield, Suno or ElevenLabs for audio/video");
+ if((provider==="suno"||provider==="elevenlabs")&&kind!=="audio")throw Error("Suno and ElevenLabs are connected for audio only");
  const payload={project_id,provider,kind,model:$("media-model").value.trim()||undefined,
   prompt:$("media-prompt").value.trim(),aspect_ratio:$("media-aspect").value,
-  ...(kind==="video"?{duration:Number($("media-duration").value)}:{}),
+  ...((kind==="video"||kind==="audio")?{duration:Number($("media-duration").value)}:{}),
   source_asset_id:$("media-source").value||undefined};
  if(!payload.prompt)throw Error("Describe what you want to create");
  const answer=await mediaCall("prepare",payload);
@@ -225,6 +229,7 @@ $("media-generation-form").addEventListener("submit",event=>safe(()=>prepareMedi
 $("refresh-media").addEventListener("click",()=>safe(refreshMedia));
 $("media-provider").addEventListener("change",()=>{
  if($("media-provider").value==="chatgpt")$("media-kind").value="image";
+ if(["suno","elevenlabs"].includes($("media-provider").value))$("media-kind").value="audio";
 });
 
 await init();

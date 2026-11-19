@@ -60,6 +60,15 @@ test("unknown monthly credits force approval, no generation starts",async()=>{
  assert.equal(d.executed,false);
  assert.equal(upstreamCalls,0);
 });
+test("fake provider allowance claims never authorise automatic generation",async()=>{
+ const response=await call("quote",{job_id:fakeJob,estimated_credits:12,included_remaining:9999,
+  allowance_source:"provider_tool",observed_at:new Date().toISOString()});
+ assert.equal(response.status,200);
+ const body=await response.json();
+ assert.equal(body.job.status,"awaiting_approval");
+ assert.equal(body.job.allowance_source,"unknown");
+ assert.equal(body.credit_decision.approvalRequired,true);
+});
 test("wrong amount is refused and precise creator approval is saved without spending",async()=>{
  const wrong=await call("approve",{job_id:fakeJob,decision:"approved",max_credits:1});
  assert.equal(wrong.status,400);
@@ -88,4 +97,15 @@ test("native GPT image jobs use no external credit balance",async()=>{
 test("successful media output cannot be falsely marked complete without a real imported asset",async()=>{
  const r=await call("verify",{job_id:fakeJob,decision:"passed",review_note:"Looks brilliant in every scene"});
  assert.equal(r.status,400);
+});
+
+test("Suno music and ElevenLabs narration are stored as audio jobs",async()=>{
+ for(const provider of ["suno","elevenlabs"]){
+  const response=await call("prepare",{project_id:project,provider,kind:"audio",
+   prompt:provider==="suno"?"A slow blues song":"Narration for a short film",duration:90,estimated_credits:5});
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.job.kind,"audio");
+  assert.equal(body.job.status,"awaiting_approval");
+ }
 });

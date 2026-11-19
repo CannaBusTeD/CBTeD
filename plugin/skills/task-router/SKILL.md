@@ -15,13 +15,19 @@ Read the universal instructions and call `cbted_get_rulebook` before creative wo
 
 **Images:** Activate the Visual Studio only. For each requested image, inspect source and references, plan the individual scene, use ChatGPT's actual image tool, then inspect that output. Generate images separately, not as a collage unless asked. Never demand writing or audio first.
 
-**Audio/music:** Activate the Audio Studio only. Use approved lyrics as-is. Make a musical brief, select an actually available integrated tool, generate and inspect real audio where supported. Do not invent provider access.
+**Audio/music:** Activate Audio Studio independently when asked, or join it to the combined `song_video_publish` / `idea_to_publish_audio` workflows when the creator requests music. Use approved lyrics word for word. Suno's actual connected tools are `mcp__Suno__account_usage`, `mcp__Suno__audio_create`, `mcp__Suno__audio_wait` and download/retrieve; for narration use `mcp__ElevenLabs__creative_generate_speech`, or an explicitly selected Runway/Higgsfield voice tool. Do not fabricate credit cost or access. Register actual audio as a project media job with the same credit gate and verified persistent file requirements as images and video.
 
 **Video directly from an idea:** Activate Animation Studio without demanding a song, script or still image. Create a storyboard/motion plan for the stated idea, select a genuinely available text-to-video provider, generate and inspect the video if authorised, and preserve prior approved work. When the creator rejects an image and asks for a video instead, route the new request directly to this branch. Do not repeat the image step, delete the rejected proposal or assume the rejected image is approved. A routing plan is not a generated video.
 
 **Video from existing song and image:** Activate the Animation Studio only. Use the supplied song and image, storyboard motion, choose an available ChatGPT video tool, produce and review each requested clip. Do not rewrite the song or regenerate the image. If the required video tool is unavailable, report the precise limitation, not a fake finished video.
 
 **Full song and video:** Coordinate writing, visual, audio and animation studios with actual approved handoffs. This full pipeline applies only when the user asks for the full pipeline.
+
+**Optional production branches:** `audio` runs without forced writing/images/video; `animation_publish` creates video directly from an idea before publishing; `song_video_publish` connects writing, imagery, music, animation and publishing; `idea_to_publish_audio` is the complete idea-to-music-to-video-to-publish workflow. Legacy workflows retain their previous scope. Do not pretend a successful plan is real media or a public post. Publishing remains fail-closed until approved provider adapters are tested.
+
+**Assembly is a real FFmpeg operation:** Use `cbted_media_reference` to get short-lived URLs for verified project-owned clips, music and narration, download them within a private approved media sandbox, and run the tested `scripts/assemble_project.py` from the repository with a project manifest. Verify the resulting MP4's actual bytes, length, audio and subtitle track; get the final file back into private project assets and record the creator's review. Do not treat the presence of `animation_assembly` in a plan as proof the video has been rendered, and do not pretend private project files are already in the sandbox.
+
+**Atomic production/media linkage:** When a media job is tied to a production run and stage, call `cbted_claim_production_step` after its mandatory stage approval, and then `cbted_media_claim` after any additional credit approval. Only call the actual connected creative tool after both succeed. When the real media is saved, `cbted_media_verify` links the final review and production-step completion atomically; do not separately forge a PASS.
 
 Mandatory rules and independent quality checks apply **within** the participating studios. Approval requirements apply only where the relevant rules require them. Never turn irrelevant specialist stages into barriers.
 

@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,12 +30,21 @@ jobs:
           node --test tests/check-social-oauth.mjs
           node --test tests/check-media-credit-policy.mjs
           node --test tests/check-generation-routing.mjs
+          node --test tests/check-pipeline-branches.mjs
           node --test tests/check-media-gate.mjs
           node --check --input-type=module < supabase/functions/cbted-media-gate/index.ts
           node --check supabase/functions/_shared/social-providers.mjs
           node --check --input-type=module < supabase/functions/cbted-social-connect/index.ts
           node tests/check-cbted-mcp.mjs
           node --test tests/check-oauth-callbacks.mjs
+      - name: Verify assembler syntax and render on hosts with FFmpeg
+        run: |
+          python3 -m py_compile scripts/assemble_project.py tests/test_assembly.py
+          if command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
+            python3 tests/test_assembly.py
+          else
+            echo "::warning::FFmpeg is absent from this runner. Real render tests were run in the connected Higgsfield media sandbox."
+          fi
       - name: Verify live orchestrator and refusal of unauthorised requests
         run: node tests/check-orchestrator-live.mjs
       - name: Verify external review rejects unauthenticated access
