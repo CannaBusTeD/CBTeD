@@ -76,7 +76,8 @@ begin
  if v_job.status not in ('ready','approved') then raise exception 'Media job is not authorised for generation'; end if;
  if v_job.provider <> 'chatgpt' then
    if v_job.quote_credits is null or v_job.quote_observed_at is null
-      or v_job.quote_observed_at < now() - CASE WHEN v_job.status='approved' THEN interval '15 minutes' ELSE interval '2 minutes' END
+      or (v_job.status='approved' and v_job.quote_observed_at < now()-interval '15 minutes')
+      or (v_job.status='ready' and v_job.quote_observed_at < now()-interval '2 minutes')
    then raise exception 'Credit quote expired: check credits again'; end if;
    if v_job.status='ready' then
      if v_job.allowance_source <> 'provider_tool' or v_job.allowance_observed_at is null
