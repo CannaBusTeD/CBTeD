@@ -32,7 +32,7 @@ export const AGENTS = Object.freeze({
   publisher:{studio:"publish",role:"Send only the approved final video and approved text to the approved connected accounts, through the configured publishing service only.",kind:"publish"},
   publish_verifier:{studio:"publish",role:"Check the publishing service's actual status for every platform and report each live link or error. Never assume a post succeeded.",kind:"text"}
 });
-const allowed = new Set(["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","idea_to_publish","plan_only"]);
+const allowed = new Set(["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","idea_to_publish","idea_to_publish_audio","song_video_publish","audio","animation_publish","plan_only"]);
 // Approval-gated kinds: anything that spends money on media or acts in public.
 export const GATED_KINDS=Object.freeze(["image","video","audio","publish"]);
 export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={}){
@@ -62,14 +62,14 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     for(const [key,agent] of selection)writingLast=add(key,agent,writingLast?[writingLast]:[]);
   }
   let ideaLast=null;
-  if(workflow==="idea_to_publish"){
+  if(["idea_to_publish","idea_to_publish_audio"].includes(workflow)){
     ideaLast=add("idea_develop","idea_developer");
     ideaLast=add("idea_critique","idea_critic",[ideaLast]);
     ideaLast=add("idea_refine","idea_refiner",[ideaLast]);
   }
-  if(["writing","song_video","idea_to_publish"].includes(workflow)){
+  if(["writing","song_video","song_video_publish","idea_to_publish","idea_to_publish_audio"].includes(workflow)){
     // In idea_to_publish the creator must explicitly approve the refined idea before any writing starts.
-    writingLast=add("writing_draft","writing_author",ideaLast?[ideaLast]:[],workflow==="idea_to_publish");
+    writingLast=add("writing_draft","writing_author",ideaLast?[ideaLast]:[],["idea_to_publish","idea_to_publish_audio"].includes(workflow));
     writingLast=add("writing_critique","writing_critic",[writingLast]);
     writingLast=add("writing_edit","writing_editor",[writingLast]);
     writingLast=add("writing_language_audit","language_auditor",[writingLast]);
@@ -78,9 +78,9 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     writingLast=add("writing_review","writing_reviewer",[writingLast]);
   }
   let storyLast=null;
-  if(workflow==="idea_to_publish")storyLast=add("story_storyboard","scene_storyboarder",[writingLast]);
+  if(["idea_to_publish","idea_to_publish_audio"].includes(workflow))storyLast=add("story_storyboard","scene_storyboarder",[writingLast]);
   let visualLast=null;
-  if(["visual","song_video","idea_to_publish"].includes(workflow)){
+  if(["visual","song_video","song_video_publish","idea_to_publish","idea_to_publish_audio"].includes(workflow)){
     const before=storyLast||writingLast;
     let last=add("visual_analysis","visual_analyst",before?[before]:[]);
     last=add("visual_select_tool","visual_tool_selector",[last]);
@@ -92,14 +92,14 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     visualLast=last;
   }
   let audioLast=null;
-  if(workflow==="song_video"){
-    audioLast=add("audio_direction","audio_director",[writingLast]);
+  if(["audio","song_video","song_video_publish","idea_to_publish_audio"].includes(workflow)){
+    audioLast=add("audio_direction","audio_director",writingLast?[writingLast]:[]);
     audioLast=add("audio_select_tool","audio_tool_selector",[audioLast]);
     audioLast=add("audio_generate","audio_generator",[audioLast],true);
     audioLast=add("audio_review","audio_reviewer",[audioLast]);
   }
   let releaseLast=null;
-  if(["animation","song_video","idea_to_publish"].includes(workflow)){
+  if(["animation","animation_publish","song_video","song_video_publish","idea_to_publish","idea_to_publish_audio"].includes(workflow)){
     let last=add("animation_storyboard","storyboarding_director",[...new Set([visualLast,audioLast].filter(Boolean))]);
     last=add("animation_motion_plan","motion_prompt_writer",[last]);
     last=add("animation_select_tool","video_tool_selector",[last]);
@@ -110,7 +110,7 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     const assembled=add("animation_assembly","sequence_assembler",[last],true);
     releaseLast=add("release_audit","release_auditor",[assembled]);
   }
-  if(workflow==="idea_to_publish"){
+  if(["idea_to_publish","idea_to_publish_audio","song_video_publish","animation_publish"].includes(workflow)){
     // Publishing is a public, side-effecting action: it always needs its own explicit approval.
     let last=add("publish_plan","publish_planner",[releaseLast]);
     last=add("publish_send","publisher",[last],true);
