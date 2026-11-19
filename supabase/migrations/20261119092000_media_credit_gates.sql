@@ -106,6 +106,6 @@ begin
  values(v_uid,p_job,'claimed',jsonb_build_object('provider',v_job.provider,'credits',v_job.quote_credits));
  return jsonb_build_object('claimed',true,'provider',v_job.provider,'kind',v_job.kind,
    'max_credits',v_job.quote_credits,'quote_fingerprint',v_job.quote_fingerprint);
-end $fn$;
+end; $fn$;
 revoke all on function public.cbted_claim_media_job(uuid) from public,anon;
 grant execute on function public.cbted_claim_media_job(uuid) to authenticated;
