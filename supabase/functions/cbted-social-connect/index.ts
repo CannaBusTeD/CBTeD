@@ -177,7 +177,12 @@ async function signedStatus(user){
   rest("cbted_social_post_requests","GET",{owner_id:"eq."+user,select:"id,connection_id,project_id,asset_id,title,caption,status,privacy,scheduled_at,approved_at,created_at",order:"created_at.desc",limit:"50"})
  ]);
  const providers=configured();
- return {available:Object.values(providers).some(Boolean),providers,connections:connections||[],post_requests:requests||[]};
+ const current=Date.now();
+ const safeConnections=(connections||[]).map(c=>{
+  const expired=c.token_expires_at&&Number.isFinite(Date.parse(c.token_expires_at))&&Date.parse(c.token_expires_at)<=current;
+  return expired&&c.status==="active"?{...c,status:"expired",post_permission:false}:c;
+ });
+ return {available:Object.values(providers).some(Boolean),providers,connections:safeConnections,post_requests:requests||[]};
 }
 async function start(user,body){
  const provider=String(body.provider||"");
@@ -214,6 +219,8 @@ async function disconnect(user,id){
 async function createPostDraft(user,body){
  const connection=await ownedConnection(user,body.connection_id);
  if(connection.status!=="active"||!connection.post_permission)throw Error("This account has not granted publishing permission");
+ if(connection.token_expires_at&&Date.parse(connection.token_expires_at)<=Date.now())
+  throw Error("The social platform permission has expired. Reconnect the account before preparing a post.");
  const project=validateUUID(body.project_id,"project"),asset=validateUUID(body.asset_id,"asset");
  const owned=await rest("projects","GET",{id:"eq."+project,owner_id:"eq."+user,select:"id",limit:"1"});
  if(!owned?.length)throw Error("Project not accessible");
