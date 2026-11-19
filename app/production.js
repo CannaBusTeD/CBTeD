@@ -211,10 +211,11 @@ async function prepareMedia(event){
  const project_id=$("production-project").value;
  if(!project_id)throw Error("Select a CBTeD project above");
  const provider=$("media-provider").value,kind=$("media-kind").value;
- if(provider==="chatgpt"&&kind!=="image")throw Error("Choose Runway or Higgsfield for generated video");
+ if(provider==="chatgpt"&&kind!=="image")throw Error("Choose Runway, Higgsfield, Suno or ElevenLabs for audio/video");
+ if((provider==="suno"||provider==="elevenlabs")&&kind!=="audio")throw Error("Suno and ElevenLabs are connected for audio only");
  const payload={project_id,provider,kind,model:$("media-model").value.trim()||undefined,
   prompt:$("media-prompt").value.trim(),aspect_ratio:$("media-aspect").value,
-  ...(kind==="video"?{duration:Number($("media-duration").value)}:{}),
+  ...((kind==="video"||kind==="audio")?{duration:Number($("media-duration").value)}:{}),
   source_asset_id:$("media-source").value||undefined};
  if(!payload.prompt)throw Error("Describe what you want to create");
  const answer=await mediaCall("prepare",payload);
@@ -225,6 +226,7 @@ $("media-generation-form").addEventListener("submit",event=>safe(()=>prepareMedi
 $("refresh-media").addEventListener("click",()=>safe(refreshMedia));
 $("media-provider").addEventListener("change",()=>{
  if($("media-provider").value==="chatgpt")$("media-kind").value="image";
+ if(["suno","elevenlabs"].includes($("media-provider").value))$("media-kind").value="audio";
 });
 
 await init();
