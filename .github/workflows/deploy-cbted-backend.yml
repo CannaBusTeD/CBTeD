@@ -32,6 +32,9 @@ jobs:
           node --test tests/check-production.mjs
           node --test tests/check-social-connect.mjs
           node --test tests/check-social-oauth.mjs
+          node --test tests/check-media-credit-policy.mjs
+          node --test tests/check-media-gate.mjs
+          node --check --input-type=module < supabase/functions/cbted-media-gate/index.ts
           node --check --input-type=module < supabase/functions/cbted-social-connect/index.ts
 
   deploy:
@@ -67,3 +70,4 @@ jobs:
           supabase functions deploy cbted-mcp --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy cbted-external-review --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy cbted-social-connect --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy cbted-media-gate --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
