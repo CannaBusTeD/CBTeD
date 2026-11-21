@@ -64,6 +64,11 @@ class GraphTests(unittest.TestCase):
             self.assertEqual(provider.calls[stage], 1, stage)
             reviewers = {r["reviewer"] for r in end["reviews"] if r["stage"] == stage}
             self.assertTrue({"qa_fidelity", "qa_continuity"}.issubset(reviewers))
+        video_master_reviewers = {
+            r["reviewer"] for r in end["reviews"]
+            if r["stage"] == "video" and r["reviewer"].startswith("master_")
+        }
+        self.assertEqual(video_master_reviewers, {"master_technical", "master_creative"})
         calls = provider.calls.copy()
         again = g.invoke({}, cfg)
         self.assertTrue(again["completed"])
@@ -87,6 +92,13 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(provider.calls["lyrics"], 2)
         self.assertEqual(len(end["artifact_history"].get("lyrics", [])), 1)
         self.assertEqual(end["attempts"]["lyrics"], 1)
+
+    def test_idea_can_retry_without_graph_key_error(self):
+        provider = FakeProvider(revise_once="idea")
+        _, _, end = self.invoke(provider, input_state())
+        self.assertTrue(end["completed"], end["blocked_reason"])
+        self.assertEqual(provider.calls["idea"], 2)
+        self.assertEqual(provider.calls["poem"], 1)
 
     def test_missing_media_blocks_and_keeps_prior_work(self):
         provider = FakeProvider(missing_media=True)
