@@ -1,4 +1,4 @@
-# CBTeD Studio LangGraph worker prototype
+# CBTeD StudioS LangGraph worker prototype
 
 **Status: engineering prototype only. No running worker, model provider, private database connection or media generation is asserted.**
 
@@ -24,4 +24,4 @@ A production deployment still requires:
 
 Do not merge this worker into the existing Deno orchestrator blindly or deploy it as a replacement. The target is **one orchestration authority, one creative project store**, with LangGraph handling allowed cyclic agent behaviour behind that authority.
 
-The existing CBTeD Studio integration contract is at [docs/CBTED_STUDIO_INTEGRATION.md](../docs/CBTED_STUDIO_INTEGRATION.md).
+The existing CBTeD StudioS integration contract is at [docs/CBTED_STUDIO_INTEGRATION.md](../docs/CBTED_STUDIO_INTEGRATION.md).
