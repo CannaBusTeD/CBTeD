@@ -1,6 +1,6 @@
-# CBTeD Studio
+# CBTeD StudioS
 
-**CBTeD Studio** is the unified, source-first creative studio. The public product name is singular; existing `CBTeD` identifiers for the repository, plugin, database functions and APIs stay unchanged for compatibility. The [integration contract](docs/CBTED_STUDIO_INTEGRATION.md) distinguishes verified connections from planned work.
+**CBTeD StudioS** is the unified, source-first creative studio. The public product spelling uses a capital final S; existing `CBTeD` identifiers for the repository, plugin, database functions and APIs stay unchanged for compatibility. The [integration contract](docs/CBTED_STUDIO_INTEGRATION.md) distinguishes verified connections from planned work.
 
 CBTeD is a source-first creative production system, with Writing, Visual, Audio and Animation specialist agent groups managed by one controlled production coordinator. The original Writing, Visual and Animation studio instructions remain authoritative.
 
@@ -45,7 +45,7 @@ CBTeD's **rules and operating procedures** are stored here. The original univers
 - The original universal master rules are **unchanged**; this is additional song-specific operating discipline.
 - The original CBTeD plugin package version 0.6.3 adds the lyric-editorial-gate skill while retaining its identity, original instructions, images, and MCP configuration.
 
-### CBTeD Studio project manager (v2)
+### CBTeD StudioS project manager (v2)
 
 - `app/index.html`, `app/styles.css`, `app/app.js` implement a keyboard/screen-reader-friendly project manager.
 - Supports Supabase email/password signup and sign-in, project creation, versioned writing, explicit approvals, project-specific rules, private file uploads/downloads, task records, and a Writing-to-Visual handoff record.

@@ -1,4 +1,4 @@
-"""CBTeD Studio LangGraph execution contract.
+"""CBTeD StudioS LangGraph execution contract.
 
 This graph is optional execution machinery behind the existing Supabase
 orchestrator. Supabase remains authoritative for ownership, stage claims,
@@ -101,7 +101,7 @@ def initial_state(owner_id: str, project_id: str, run_id: str, instructions: str
     return {
         "messages": [HumanMessage(content=instructions)],
         "owner_id": owner_id, "project_id": project_id, "run_id": run_id,
-        "instructions": instructions, "active_persona": "CBTeD Studio",
+        "instructions": instructions, "active_persona": "CBTeD StudioS",
         "current_agent_turn": "", "stage": "idea", "constraints": [],
         "artifacts": {}, "artifact_history": {}, "reviews": [],
         "review_flags": {}, "attempts": {}, "max_attempts": 3,
