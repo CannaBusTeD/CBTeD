@@ -319,8 +319,23 @@ def master_reviewer(s: State, p: Provider) -> dict[str, Any]:
         return {"blocked_reason": "Final asset or explicit release approval missing"}
     if not p.verify_final_export(video, music):
         return {"blocked_reason": "Final movie/soundtrack audit failed"}
+    # Independent full-length technical and creative reviews are mandatory.
+    final_reviews: list[Review] = []
+    for reviewer in ("master_technical", "master_creative"):
+        verdict, findings = p.inspect("video", video, reviewer)
+        final_reviews.append({
+            "stage": "video", "version": video["version"],
+            "reviewer": reviewer, "verdict": verdict,
+            "findings": list(findings),
+        })
+    if any(r["verdict"] != "pass" for r in final_reviews):
+        return {
+            "reviews": [*s.get("reviews", []), *final_reviews],
+            "blocked_reason": "Final technical or creative audit did not pass",
+        }
     return {
         "completed": True, "current_agent_turn": "master_reviewer",
+        "reviews": [*s.get("reviews", []), *final_reviews],
         "completion_evidence": f"{video['idempotency_key']}:{music['idempotency_key']}",
         "blocked_reason": "",
     }
@@ -386,7 +401,7 @@ def build_graph(provider: Provider | None = None, checkpointer: Any = None) -> A
         {"advance": "advance", "retry": "retry", "block": "block"},
     )
     graph.add_conditional_edges("retry", lambda s: producer_names.get(after_retry(s), after_retry(s)),
-                                {**{k: v for k, v in producer_names.items()}, "block": "block"})
+                                {**{name: name for name in producer_names.values()}, "block": "block"})
     graph.add_conditional_edges(
         "advance", after_advance,
         {**{k: v for k, v in producer_names.items()},
