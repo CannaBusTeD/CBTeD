@@ -1,0 +1,27 @@
+name: Test CBTeD Studio LangGraph Worker
+on:
+  pull_request:
+    paths:
+      - "worker/**"
+      - ".github/workflows/test-cbted-studio-langgraph.yml"
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "worker/**"
+      - ".github/workflows/test-cbted-studio-langgraph.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install worker dependencies
+        run: python -m pip install -r worker/requirements.txt
+      - name: Compile and test no-network worker
+        run: |
+          python -m py_compile worker/cbted_studio_graph.py worker/test_cbted_studio_graph.py
+          python -m unittest discover -s worker -p "test_*.py" -v
