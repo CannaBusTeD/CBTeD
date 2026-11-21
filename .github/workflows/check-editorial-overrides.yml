@@ -1,0 +1,26 @@
+name: Check CBTeD StudioS editorial overrides
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/20261121212243_cbted_editorial_override_requests.sql"
+      - "tests/check-editorial-overrides.mjs"
+      - "docs/CBTED_STUDIOS_DESIGN_AND_EDITING.md"
+      - ".github/workflows/check-editorial-overrides.yml"
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "supabase/migrations/20261121212243_cbted_editorial_override_requests.sql"
+      - "tests/check-editorial-overrides.mjs"
+      - ".github/workflows/check-editorial-overrides.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate owner-only editable-request contract
+        run: node --test tests/check-editorial-overrides.mjs
