@@ -1,12 +1,12 @@
-# CBTeD Studio: canonical integration and release contract
+# CBTeD StudioS: canonical integration and release contract
 
-**Product name: CBTeD Studio** (singular). "CBTeD" remains the internal legacy prefix for the existing repository, MCP plugin, API routes and SQL identifiers; renaming those identifiers would break existing clients. All user-facing Studio branding uses "CBTeD Studio".
+**Product name: CBTeD StudioS** (with a capital final S). "CBTeD" remains the internal legacy prefix for the existing repository, MCP plugin, API routes and SQL identifiers; renaming those identifiers would break existing clients. All user-facing Studio branding uses "CBTeD StudioS".
 
 ## One product, three responsibilities
 
 - **GitHub `CannaBusTeD/CBTeD`** is the source of truth for tracked rules, execution code, migrations and tests.
 - **Existing Supabase project `dmzzyfiwtosxtyekpbfi`** is authoritative for creative projects, source versions, rules, assets, tasks, production runs/steps, approvals and audit evidence. The CBTeD OAuth/MCP and orchestrator Edge Functions stay in this project.
-- **Existing Lovable project `2cde2b1a-a345-4831-8ca6-aaf5597c44e7`** is the CBTeD Studio web application, INCLUDING its pre-existing video publisher. Lovable Cloud retains its own publisher/account database, but its interim `studio_*` creative demo records MUST NOT become a second source of authoritative creative projects. Never delete these records without an explicit migration/back-up plan.
+- **Existing Lovable project `2cde2b1a-a345-4831-8ca6-aaf5597c44e7`** is the CBTeD StudioS web application, INCLUDING its pre-existing video publisher. Lovable Cloud retains its own publisher/account database, but its interim `studio_*` creative demo records MUST NOT become a second source of authoritative creative projects. Never delete these records without an explicit migration/back-up plan.
 
 A Python LangGraph worker is an optional execution engine behind the current authenticated orchestrator, **not** a replacement Supabase database or a new master of approval state. Supabase Deno Edge Functions cannot run a Python LangGraph worker directly; host the worker separately and connect only after security tests and explicit provider/cost approval.
 
@@ -38,4 +38,4 @@ A Python LangGraph worker is an optional execution engine behind the current aut
 
 ## Release definition
 
-"CBTeD Studio fully integrated" is allowed only when *the same* authorised project and asset/version data are visible through Lovable, CBTeD MCP and canonical Supabase, and a verified completed run stays complete after reload/retry. "Full creative production" additionally requires real provider integrations and successful media assembly. Never use a placeholder page, test-mode success or a health ping as proof of completed integration.
+"CBTeD StudioS fully integrated" is allowed only when *the same* authorised project and asset/version data are visible through Lovable, CBTeD MCP and canonical Supabase, and a verified completed run stays complete after reload/retry. "Full creative production" additionally requires real provider integrations and successful media assembly. Never use a placeholder page, test-mode success or a health ping as proof of completed integration.
