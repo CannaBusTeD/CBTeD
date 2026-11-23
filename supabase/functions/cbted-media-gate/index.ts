@@ -3,6 +3,7 @@
 // Quote -> credit decision -> specific approval -> atomic claim -> provider submission
 // -> private media import -> creative review. Never spend credits here.
 import {generationDecision,validGenerationSpec,QUOTE_MAX_AGE_MS} from "../_shared/media-credit-policy.mjs";
+import {assertQualityPreflight,assessQualityEvidence} from "../_shared/quality-gate.mjs";
 const ROOT=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
 const SERVICE=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
 const PUB=(()=>{const v=Deno.env.get("SUPABASE_PUBLISHABLE_KEY")||Deno.env.get("SUPABASE_ANON_KEY");if(v)return v;try{return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")||"{}").default||""}catch{return ""}})();
@@ -47,6 +48,14 @@ async function ownedAsset(projectId,assetId,kind){
  const row=rows[0];
  if(kind && !String(row.mime_type||"").startsWith(kind+"/"))throw Error("The input asset is not a "+kind);
  return row;
+}
+async function ownedReference(user,assetId){
+ requiredId(assetId,"character reference");
+ const rows=await db("assets","GET",{id:"eq."+assetId,asset_role:"eq.reference",select:"id,project_id,mime_type,storage_path",limit:"1"});
+ if(rows?.length!==1||!String(rows[0].mime_type||"").startsWith("image/"))throw Error("Approved image reference was not found");
+ await ownedProject(user,rows[0].project_id);
+ if(!rows[0].storage_path)throw Error("Reference has no stored image");
+ return rows[0];
 }
 async function ownedJob(user,jobId){
  requiredId(jobId,"job");
@@ -94,6 +103,13 @@ async function prepare(user,body){
  const projectId=requiredId(body.project_id,"project");await ownedProject(user,projectId);
  const spec={provider:body.provider,kind:body.kind,prompt:body.prompt,model:body.model||null,
   aspect_ratio:body.aspect_ratio||"auto",duration:body.duration,estimated_credits:body.estimated_credits};
+ let quality=null;
+ if(["image","video"].includes(spec.kind) &&
+    (body.run_id||body.quality||Deno.env.get("CBTED_VISUAL_QA_REQUIRED")==="true")){
+  if(!body.quality)throw Error("Versioned visual QA contract required for this production stage");
+  for(const assetId of body.quality.attached_character_asset_ids||[])await ownedReference(user,assetId);
+  quality=assertQualityPreflight({kind:spec.kind,provider:spec.provider,prompt:spec.prompt,quality:body.quality});
+ }
  validGenerationSpec(spec);
  if(spec.provider==="chatgpt"&&spec.kind!=="image")throw Error("Native ChatGPT generation supports images here; video needs a connected video provider");
  if(body.run_id){
@@ -108,7 +124,18 @@ async function prepare(user,body){
    throw Error("The linked production stage must be a matching pending or claimed media operation");
  }
  if(body.source_asset_id)await ownedAsset(projectId,body.source_asset_id,"image");
- const settings={aspect_ratio:spec.aspect_ratio,count:1,...((spec.kind==="video"||spec.kind==="audio")&&spec.duration?{duration:spec.duration}:{})};
+ const settings={aspect_ratio:spec.aspect_ratio,count:1,...((spec.kind==="video"||spec.kind==="audio")&&spec.duration?{duration:spec.duration}:{}),...(quality?{quality}: {})};
+ if(quality){
+  const sig=await fingerprint({project_id:projectId,provider:spec.provider,kind:spec.kind,
+   model:spec.model,prompt:spec.prompt,settings:{...settings,quality:{...quality,request_signature:undefined}},
+   source_asset_id:body.source_asset_id||null,quote_credits:0,billing_mode:"content"});
+  quality.request_signature=sig;
+  const old=await db("cbted_media_jobs","GET",{project_id:"eq."+projectId,owner_id:"eq."+user,
+   select:"status,settings",order:"created_at.desc",limit:"100"});
+  if(old?.some(j=>["failed","rejected"].includes(j.status)&&j.settings?.quality?.request_signature===sig)
+     &&quality.user_authorised_identical_retry!==true)
+   throw Error("Repeated failed generation unchanged; alter the scene or explicitly authorise the identical rerun");
+ }
  const quote=cleanQuote(body,spec.provider);
  const draft={owner_id:user,project_id:projectId,run_id:body.run_id||null,
   step_key:typeof body.step_key==="string"?body.step_key.slice(0,120):null,
@@ -241,6 +268,11 @@ async function verify(account,body){
  const note=String(body.review_note||"").trim();
  if(note.length<15||note.length>2000)throw Error("Provide a specific review note about the actual image/audio/video");
  if(!["passed","failed"].includes(body.decision))throw Error("Choose passed or failed");
+ if(job.settings?.quality && body.decision==="passed"){
+  const qa=assessQualityEvidence(job.settings.quality,body.quality_evidence);
+  if(qa.status!=="passed")throw Error("Visual QA cannot pass: "+qa.reasons.join("; "));
+  await audit(account.id,job.id,"quality_passed",{scene_id:job.settings.quality.scene_id,inspection:body.quality_evidence});
+ }
  // This user-scoped SQL function atomically updates both the media job and
  // its linked production stage, verifying a private stored asset exists.
  const endpoint=ROOT+"/rest/v1/rpc/cbted_finish_media_generation";
