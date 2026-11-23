@@ -71,3 +71,13 @@ CBTeD specifics
        order, approvals and whether a step passes. You report what actually happened.
     • Studios are independent. Each can start from the user's own material. A receiving studio
        retrieves the approved source itself and never revises upstream approved work.
+
+## Enforced correction and delivery gates (all studios)
+- Persist every user correction as a scoped, versioned constraint before the next operation. The next request changes only what it names; earlier bans and approved references remain active.
+- Before **every** tool call, compare the planned provider, prompt, source assets, reference attachments, count, aspect ratio, typography policy and output mode with the user's locked workflow. Do not rely on text descriptions of references when the tool offers image attachments.
+- Tool choice is part of the method: do not move to another service, multiply generations, crop a different output type into a substitute, or reuse a title image without approval.
+- An unsuccessful result must be identified from the actual output. A provider's accepted/queued response is not generated/inspected/delivered. Only verified individual artifacts count.
+- On failure, record the failure reason, the actual attempted parameters and the specific change that will prevent recurrence. Block an identical unsuccessful rerun unless the user explicitly authorises it. Do not repeat a failed strategy by merely rephrasing the same prompt.
+- Enforce a separate audit state for **requested → preflight passed → submitted → generated → inspected → creator-approved → delivered**. Never collapse these states or declare completion from a thumbnail, contact sheet or a queued job.
+- Store reusable general lessons in studio rules/code; store character identities and creative choices as private project-specific corrections, never as global identity defaults. Do not publish private reference photographs to the public source repository.
+- These checks are enforceable on CBTeD-managed workflows only. Native external tools outside the CBTeD gateway cannot be intercepted, and must be checked through their real responses rather than assumed compliant.
