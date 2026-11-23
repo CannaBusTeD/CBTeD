@@ -58,7 +58,7 @@ export function assertQualityPreflight({kind,provider,prompt,quality,previousFai
       previousFailedSignatures.includes(quality.request_signature) &&
       quality.user_authorised_identical_retry !== true)
     err("QA_REPEAT_FAILURE","An identical failed operation cannot run again without a changed specification or explicit user approval.");
-  return { ...quality, version: QUALITY_CONTRACT_VERSION, required_character_asset_ids: [...required],
+  return { ...quality, kind, version: QUALITY_CONTRACT_VERSION, required_character_asset_ids: [...required],
     attached_character_asset_ids: [...attached] };
 }
 
