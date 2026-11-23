@@ -54,3 +54,6 @@ Before submission verify the approved image, correct image-to-video mode, select
 
 ## Boundaries
 The same creative method applies across image-to-video tools, but exact syntax and engine features vary. Provider-specific details belong in separately maintained adapters, never in this general guide. The source guide is a prompting method, not a complete executable tool-operation manual.
+
+## User-defined scene boundary
+When a user supplies a set of visual references as framing guides, distinguish actual **start/end-frame controls** (only if supported and verified) from optional intermediate composition references. Intermediate references describe camera perspective, pose, lens and geography; they do not create edits. If the user requests a single take, use one continuous temporal motion instruction. Keep camera orbit direction and smooth in/out motion coherent, and do not insert events, future reveals or background plot information beyond this clip. Never guess provider input counts, credit costs or duration support: use the actual provider schema and disclose unverified controls.
