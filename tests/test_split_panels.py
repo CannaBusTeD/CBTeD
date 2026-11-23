@@ -19,8 +19,15 @@ class PanelsTest(unittest.TestCase):
             self.assertEqual(len(files), 4)
             self.assertTrue(all((root / "out" / f["file"]).exists() for f in files))
             self.assertTrue(all(f["status"] == "needs_review" for f in files))
-            self.assertFalse(all(f["meets_minimum_resolution"] for f in files))
+            self.assertTrue(all(f["meets_minimum_resolution"] for f in files))
             self.assertTrue((root / "out" / "manifest.json").exists())
+    def test_low_resolution_crops_remain_unapproved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); source = root / "tiny.png"
+            Image.new("RGB", (800, 450)).save(source)
+            frames = module.split_sheet(source, root / "out", 2, 2)
+            self.assertFalse(any(f["meets_minimum_resolution"] for f in frames))
+            self.assertTrue(all(f["status"] == "needs_review" for f in frames))
     def test_one_frame_is_not_a_grid(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp); im=p/"a.png"; Image.new("RGB", (800, 450)).save(im)
