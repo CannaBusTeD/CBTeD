@@ -6,7 +6,7 @@ import {webcrypto} from "node:crypto";
 import {generationDecision,validGenerationSpec,QUOTE_MAX_AGE_MS} from "../supabase/functions/_shared/media-credit-policy.mjs";
 import {assertQualityPreflight,assessQualityEvidence} from "../supabase/functions/_shared/quality-gate.mjs";
 const code=readFileSync(new URL("../supabase/functions/cbted-media-gate/index.ts",import.meta.url),"utf8");
-const noImport=code.replace(/^import \\{[^\\n]+\\} from "[^"]+";\\s*/gm,"");
+const noImport=code.replace(/^import \{[^\n]+\} from "[^"]+";\s*/gm,"");
 const project="11111111-1111-4111-8111-111111111111";
 const userId="22222222-2222-4222-8222-222222222222";
 const fakeJob="33333333-3333-4333-8333-333333333333";
