@@ -556,3 +556,11 @@ This file should be used together with:
 - Visual Studio
 
 It is the execution manual for practical image generation.
+
+## Preemptive failure-prevention checklist (applies before every frame)
+Treat a user correction as a locked project rule, not just conversational feedback. For every scene: retrieve exact source; resolve approved character asset IDs; check storage permissions and current, working reference URLs; attach the exact image assets to that specific tool call; lock user-selected provider and output size; specify **one** scene and **one** independent image, with no batch/collage instructions; isolate title copy to the designated thumbnail only; compare the planned action and pose with prior frames to prevent near-duplicates. A preflight failure blocks submission and any paid credits.
+
+## Result audit and recovery
+Verify actual returned image bytes and dimensions rather than trusting a successful tool response. Inspect image content for panel count, title leakage, likeness, anatomy, setting, pose variety and reference adherence. An unexpected multi-panel image must **not** be delivered as a finished standalone frame. Split actual panels into separate files when requested/feasible, record original crop resolution, and regenerate a scene if a crop does not meet required quality. Never mark a cropped tile as an independent source generation. Keep each asset's requested/prepared/submitted/generated/inspected/approved/delivered status separate. A failed image is retried only with a documented change of method/input; prevent identical failed reruns without creator approval.
+
+Quality enforcement is implemented in `supabase/functions/_shared/quality-gate.mjs` for CBTeD-managed production. Native ChatGPT or other provider actions outside this backend remain subject to actual tool capability and independent inspection. Do not suggest the backend intercepts them.
