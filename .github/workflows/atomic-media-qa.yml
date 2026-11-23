@@ -1,0 +1,19 @@
+name: Atomic media QA regression
+on:
+  push:
+    paths:
+      - 'supabase/functions/_shared/quality-gate.*'
+      - '.github/workflows/atomic-media-qa.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/_shared/quality-gate.*'
+      - '.github/workflows/atomic-media-qa.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test supabase/functions/_shared/quality-gate.test.mjs

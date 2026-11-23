@@ -142,3 +142,9 @@ BUILD THE NEXT IMAGE FROM FIRST PRINCIPLES.
 CONTINUE UNTIL THE REQUESTED NUMBER OF SEPARATE, COMPLETELY INDIVIDUAL IMAGES EXISTS.
 
 Maintain world consistency, character identity, source meaning, image-to-image variety and execution accuracy. Speed is never the creative objective.
+
+## 21. HARD FAILURES FROM IMAGE-PRODUCTION REGRESSION
+A user requesting ten separate images authorises ten **individual** frames, never one ten-panel poster. A rejected panel is not a completed scene. Do not send a contact sheet to replace the expected singles. If an unexpected composite is produced, separate its panels as individual files for inspection; if those crops fail required resolution or fidelity, regenerate the affected scene individually. Tell the user which files are crops.
+An approved character photo must be supplied as an actual tool reference on every call if tool reference inputs exist. Prompt prose alone does not lock identity. Never substitute a generic lookalike, a remembered description, or a reference for the wrong character. Avoid reusing signed URLs without verifying their current validity.
+A title card is a separate scene. Once the title is complete, remove title copy and title-card source references from subsequent scene prompts unless explicitly asked.
+Review the actual result before proceeding. Check one complete frame, no borders or panels, correct faces and accessories, scene novelty, aspect ratio and text. Record failures and change the parameters/method before retrying; an identical failed attempt is blocked without explicit authorisation.

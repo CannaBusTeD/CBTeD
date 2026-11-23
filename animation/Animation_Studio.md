@@ -113,3 +113,10 @@ Share approved project decisions, source identifiers, completed and failed shot 
 ## Completion status
 
 This is a detailed **operational instruction specification**, not an installed image-to-video engine. A functioning implementation still requires connected generation actions, provider adapters, shared project state and the necessary authorisations. The prompt guide and universal workflow remain separate, authoritative source documents.
+
+## Continuity and prompt-scope quality gate
+- For every clip, retrieve the precise scene references plus **separately attached and verified** character references. A batch-level portrait mention is insufficient when the provider requires attachments on each task.
+- Respect the user's specified start/end frame roles and intermediate visual waypoints. Do not claim exact endpoint enforcement unless the selected model exposes the controls and the uploads are accepted.
+- A continuous shot must be one coherent camera trajectory; reference images are guidance, not instructions to cut between scenes, unless cuts were requested. Preserve orbit direction, lens distortion, subject momentum, room geography and identity. If an engine cannot reliably honour the shot specification, disclose that before submission.
+- Write only the motion, camera path, performers and atmosphere **inside the requested clip**. Do not add future plot, unrelated reveals, exact song beats, prohibitions or continuity backstory when the user asked for a scene-only prompt.
+- Lock the requested service; do not switch to another video provider or spend credits without authorisation. The completed video must be opened and checked for cuts, duration, framing, movement, identity, text leakage and correct final frame. An accepted task ID does not count as completed or approved video.

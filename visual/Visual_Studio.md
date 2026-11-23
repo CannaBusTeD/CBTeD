@@ -122,3 +122,14 @@ The repository is public. Do not publish a user's private character photographs,
 ## Next development section
 
 **Animation Studio:** use approved individual images as the source for shot-by-shot motion, image-to-video prompts, movement and camera continuity, separate execution and result tracking, with only actually connected video tools.
+
+## Atomic media quality gate (mandatory)
+1. Each requested **scene** is one independent generation request and one separately deliverable image. A storyboard or contact sheet is a planning artifact, never an acceptable substitute for separate frames. Do not describe a set of scenes inside one image prompt.
+2. Retrieve and attach the actual approved character image assets for **each** generation invocation, not merely once per batch and not via prose. Verify the attached reference IDs and their roles before submission; use server-issued fresh signed links only when required. If a reference is expired or missing, stop before consuming credits.
+3. Preserve established face, age, hair, beard, proportions, clothing, glasses, tattoos and other locked appearance details. Changes to background, fisheye optics, pose and framing may vary, but **character identity must not drift**. Escalate missing or conflicting references before proceeding.
+4. Reserve exact title words and any branded overlay for explicitly designated title images. Ordinary frames require an explicit **no text** policy; a prior title frame must not be reused as a generic visual reference in a way that leaks lettering.
+5. For multiple images, track pose, camera distance/height, shot angle, optical effect and setting in a scene manifest. Reject near-identical duplicates when the requested set demands distinct compositions.
+6. Inspect the actual returned visual. Detect multi-panel layouts or request an explicit panel-count inspection. If a provider returns a sheet unexpectedly, split it into individually named assets for review, disclose any loss of resolution, and regenerate as native full-resolution single images where the individual crops are inadequate. Never deliver the sheet as an individual image.
+7. The post-generation inspection must explicitly check output count, frame ratio, title/lettering, anatomy, pose variety, character likeness against actual supplied references, and stable project constraints. Unknown findings do not count as pass.
+8. Preserve successful assets; correct only the failed scene. Record a changed corrective approach before another attempt; avoid spending credits on unchanged rerolls. Report exactly how many standalone files are verified and how many remain.
+9. Use the versioned shared `quality-gate.mjs` contract for CBTeD-managed media jobs. A generated asset remains `needs_review` until the required checks are evidenced.
