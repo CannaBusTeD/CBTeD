@@ -4,8 +4,9 @@ import {readFileSync} from "node:fs";
 import vm from "node:vm";
 import {webcrypto} from "node:crypto";
 import {generationDecision,validGenerationSpec,QUOTE_MAX_AGE_MS} from "../supabase/functions/_shared/media-credit-policy.mjs";
+import {assertQualityPreflight,assessQualityEvidence} from "../supabase/functions/_shared/quality-gate.mjs";
 const code=readFileSync(new URL("../supabase/functions/cbted-media-gate/index.ts",import.meta.url),"utf8");
-const noImport=code.replace(/^import \{[^\n]+\} from "[^"]+";\s*/m,"");
+const noImport=code.replace(/^import \\{[^\\n]+\\} from "[^"]+";\\s*/gm,"");
 const project="11111111-1111-4111-8111-111111111111";
 const userId="22222222-2222-4222-8222-222222222222";
 const fakeJob="33333333-3333-4333-8333-333333333333";
@@ -36,7 +37,7 @@ const sandbox={
  }},serve(fn){serve=fn}},
  Request,Response,URL,URLSearchParams,TextEncoder,Uint8Array,crypto:webcrypto,
  AbortSignal,fetch:fakeFetch,atob,btoa,console,
- generationDecision,validGenerationSpec,QUOTE_MAX_AGE_MS
+ generationDecision,validGenerationSpec,QUOTE_MAX_AGE_MS,assertQualityPreflight,assessQualityEvidence
 };
 vm.runInNewContext(noImport,sandbox,{filename:"cbted-media-gate/index.ts"});
 function call(path,body,auth=true){
