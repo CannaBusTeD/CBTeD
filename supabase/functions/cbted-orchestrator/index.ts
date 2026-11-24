@@ -85,9 +85,11 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const inputs=completed.map(x=>({stage:x.step_key,artifact:x.output_text||null,asset_id:x.asset_id||null}));
  const latest=(keys)=>[...completed].reverse().find(x=>keys.includes(x.step_key)&&x.output_text)?.output_text;
  const manuscript=latest(["writing_proofread","writing_rewrite","writing_draft"]);
- const source=original || manuscript || latest(["idea_refine","idea_develop"]) || s.run.instructions;
+ const reviewedVersion=(s.attempts||[]).find(x=>x.step_key==="writing_proofread"&&x.status==="passed"&&x.output_text);
+ const revisionSource=step.key==="writing_rewrite" && reviewedVersion ? reviewedVersion.output_text : null;
+ const source=revisionSource || original || manuscript || latest(["idea_refine","idea_develop"]) || s.run.instructions;
  const history=(s.attempts||[]).filter(x=>x.step_key==="writing_review" && /^VERDICT:\s*REPAIR/i.test(x.output_text||"")).slice(0,1);
- const handoff=JSON.stringify({dependencies:step.depends_on,completed:inputs,recorded_approvals:latestDecisions(s.approvals),review_feedback:history.map(x=>x.output_text)});
+ const handoff=JSON.stringify({dependencies:step.depends_on,completed:inputs,manuscript_under_revision:revisionSource,recorded_approvals:latestDecisions(s.approvals),review_feedback:history.map(x=>x.output_text)});
  const task=modelInstruction(step,rulebook,projectRules,source,handoff,s.run.instructions);
  const originalProduction=!s.run.source_version_id && ["idea_to_publish","idea_to_publish_audio","writing","song_video","song_video_publish"].includes(s.run.workflow);
  const editorialAuthority=originalProduction ? "\\nYou are developing an original commissioned work. Within the authorised stage, the assigned specialist chooses the strongest editorial and staging options. Suggestions from earlier agents are advisory, not creator mandates. The creator brief and exact hook take precedence over additions by previous agents. Do not ask the creator to choose between draft variants. If an invented line conflicts with the brief, remove it. Return the full working version after rewrite or proofread." : "";
