@@ -109,17 +109,24 @@ async function loadActualImage(token,project,previousStep){
  const asset=assets[0];if(!asset)throw Error("Actual stored image not found");
  return privateImageData(token,asset);
 }
-async function runText(prompt,imageDataUrl=null){
+async function runText(prompt,imageDataUrl=null,isReview=false){
 
  const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_TEXT_MODEL");
  if(!secret||!model)throw Error("Text provider is not configured");
+ const schema=isReview
+  ? {type:"object",additionalProperties:false,properties:{verdict:{type:"string",enum:["PASS","REPAIR","BLOCKED"]},findings:{type:"string"}},required:["verdict","findings"]}
+  : {type:"object",additionalProperties:false,properties:{status:{type:"string",enum:["complete","blocked"]},artifact:{type:"string"},reason:{type:"string"}},required:["status","artifact","reason"]};
  const result=await requestJSON("https://api.openai.com/v1/responses",
  {Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",
- {model,store:false,text:{format:{type:"json_schema",name:"stage_result",strict:true,schema:{type:"object",additionalProperties:false,properties:{status:{type:"string",enum:["complete","blocked"]},artifact:{type:"string"},reason:{type:"string"}},required:["status","artifact","reason"]}}},input:[{role:"user",content:[{type:"input_text",text:prompt},...(imageDataUrl?[{type:"input_image",image_url:imageDataUrl,detail:"high"}]:[])]}],max_output_tokens:8000});
+ {model,store:false,text:{format:{type:"json_schema",name:"stage_result",strict:true,schema}},input:[{role:"user",content:[{type:"input_text",text:prompt},...(imageDataUrl?[{type:"input_image",image_url:imageDataUrl,detail:"high"}]:[])]}],max_output_tokens:8000});
  if(result.status!=="completed")throw Error("Text provider did not complete");
  const text=result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||"";
  if(!text.trim())throw Error("Text provider returned no content");
  const stage=JSON.parse(text);
+ if(isReview){
+  if(!stage.findings?.trim()||!["PASS","REPAIR"].includes(stage.verdict))throw Error("Review lacks required input: "+String(stage.findings||"").slice(0,230));
+  return {text:"VERDICT: "+stage.verdict+"\\n"+stage.findings,provider:"openai-responses",model,response_id:result.id};
+ }
  if(stage.status!=="complete" || !stage.artifact?.trim() )throw Error("Stage did not produce a deliverable: "+String(stage.reason||"empty artifact").slice(0,230));
  return {text:stage.artifact,provider:"openai-responses",model,response_id:result.id};
 }
@@ -199,13 +206,13 @@ async function executeOne(token,user,s){
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
  const isReview=["writing_reviewer","image_reviewer"].includes(chosen.agent);
- if(isReview)prompt+="\n\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Completion of steps is not proof of quality.";
+ if(isReview)prompt+="\n\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Return a verdict and findings only. If the manuscript is present, any editorial defect must receive REPAIR with actionable instructions. BLOCKED is only for missing or unreadable source material. The reviewer never rewrites. Completion of steps is not proof of quality.";
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
    :null;
  await rpc(token,"cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
-   const result=chosen.kind==="text"?await runText(prompt,imageData):await runImage(
+   const result=chosen.kind==="text"?await runText(prompt,imageData,isReview):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
    const reviewFailed=isReview&&!reviewPassed(result.text);
    await rpc(token,"cbted_finish_production_step",{
