@@ -118,7 +118,7 @@ async function runText(prompt,imageDataUrl=null){
  const text=result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||"";
  if(!text.trim())throw Error("Text provider returned no content");
  const stage=JSON.parse(text);
- if(stage.status!=="complete" || !stage.artifact?.trim() || stage.reason?.trim())throw Error("Stage did not produce a deliverable: "+String(stage.reason||"empty artifact").slice(0,230));
+ if(stage.status!=="complete" || !stage.artifact?.trim() )throw Error("Stage did not produce a deliverable: "+String(stage.reason||"empty artifact").slice(0,230));
  return {text:stage.artifact,provider:"openai-responses",model,response_id:result.id};
 }
 async function runImage(prompt,user,project,token){
@@ -201,7 +201,7 @@ async function executeOne(token,user,s){
     p_text:result.text||null,p_asset:result.asset_id||null,
     p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,check:"provider_returned_and_recorded"}
    });
-   if(reviewFailed&&s.run.workflow==="writing_rewrite"&&chosen.key==="writing_review"){
+   if(reviewFailed&&chosen.key==="writing_review"&&(s.run.workflow==="writing_rewrite" || (s.run.id===configuredRunId() && /^VERDICT:\s*REPAIR/i.test(result.text)))){
       try{
         await rpc(token,"cbted_retry_production_step",{p_run:s.run.id,p_step:chosen.key});
         return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:true};
