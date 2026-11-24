@@ -111,9 +111,9 @@ async function loadActualImage(token,project,previousStep){
  const asset=assets[0];if(!asset)throw Error("Actual stored image not found");
  return privateImageData(token,asset);
 }
-async function runText(prompt,imageDataUrl=null,isReview=false){
+async function runText(prompt,imageDataUrl=null,isReview=false,revision=false){
 
- const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_TEXT_MODEL");
+ const secret=Deno.env.get("OPENAI_API_KEY"),model=revision?(Deno.env.get("CBTED_EDITORIAL_REPAIR_MODEL")||"gpt-5.4-mini"):Deno.env.get("CBTED_TEXT_MODEL");
  if(!secret||!model)throw Error("Text provider is not configured");
  const schema=isReview
   ? {type:"object",additionalProperties:false,properties:{verdict:{type:"string",enum:["PASS","REPAIR","BLOCKED"]},findings:{type:"string"}},required:["verdict","findings"]}
@@ -207,6 +207,7 @@ async function executeOne(token,user,s){
  const original=[src?.content||"",src?.ideas||"",src?.suggested_text||""].filter(Boolean).join("\n\n");
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
+ if(chosen.agent==="writing_synthesizer")prompt+="\nYou are the editor responsible for implementing the requested repairs yourself on the supplied working manuscript. Required changes are your assignment, not missing inputs. Return the full revised text as artifact. For original commissions use the creator brief to resolve editorial choices.";
  const isReview=["writing_reviewer","image_reviewer"].includes(chosen.agent);
  if(chosen.agent==="writing_reviewer")prompt+="\nJudge only the current manuscript against the creator brief and applicable rules. A line the creator explicitly requires is fixed. Check each named performer actually delivers the requested hook. Request repairs only for a concrete material problem present in this manuscript. A hypothetical risk, lack of a compliance statement, or a preference in an earlier agent draft is not a defect.";
  if(isReview)prompt+="\n\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Return a verdict and findings only. If the manuscript is present, any editorial defect must receive REPAIR with actionable instructions. BLOCKED is only for missing or unreadable source material. The reviewer never rewrites. Completion of steps is not proof of quality.";
@@ -215,7 +216,7 @@ async function executeOne(token,user,s){
    :null;
  await rpc(token,"cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
-   const result=chosen.kind==="text"?await runText(prompt,imageData,isReview):await runImage(
+   const result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
    const reviewFailed=isReview&&!reviewPassed(result.text);
    await rpc(token,"cbted_finish_production_step",{
