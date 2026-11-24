@@ -87,7 +87,7 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const manuscript=latest(["writing_proofread","writing_rewrite","writing_draft"]);
  const source=original || manuscript || latest(["idea_refine","idea_develop"]) || s.run.instructions;
  const history=(s.attempts||[]).filter(x=>x.step_key==="writing_review" && /^VERDICT:\s*REPAIR/i.test(x.output_text||"")).slice(0,1);
- const handoff=JSON.stringify({dependencies:step.depends_on,completed:inputs,review_feedback:history.map(x=>x.output_text)});
+ const handoff=JSON.stringify({dependencies:step.depends_on,completed:inputs,recorded_approvals:latestDecisions(s.approvals),review_feedback:history.map(x=>x.output_text)});
  const task=modelInstruction(step,rulebook,projectRules,source,handoff,s.run.instructions);
  return task+"\nThe backend has already retrieved the project and stage state above. For a new work the saved brief authorizes an original draft. Treat generated manuscripts as working versions. Use the exact manuscript above for editorial tasks. Draft, rewrite and proofread must return the complete resulting manuscript. Critique and audit return findings. Complete only your assigned stage. Return status complete with the actual deliverable, or blocked with the missing prerequisite in reason. Never mark a request for input complete.";
 
@@ -121,18 +121,28 @@ async function runText(prompt,imageDataUrl=null){
  if(stage.status!=="complete" || !stage.artifact?.trim() )throw Error("Stage did not produce a deliverable: "+String(stage.reason||"empty artifact").slice(0,230));
  return {text:stage.artifact,provider:"openai-responses",model,response_id:result.id};
 }
-async function runImage(prompt,user,project,token){
- const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_IMAGE_MODEL");
+async function runImage(prompt,user,project,token,rules){
+ const setting=rules.find(r=>r.scope==="visual"&&r.rule_key==="image_generation_settings"&&r.is_locked);
+ const options=setting?JSON.parse(setting.body):{};
+ const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_IMAGE_MODEL") || (options.model==="gpt-image-2" ? options.model : null);
  if(!secret||!model)throw Error("Image provider is not configured");
- const size=Deno.env.get("CBTED_IMAGE_SIZE")||"1536x864";
+ const size=options.size || Deno.env.get("CBTED_IMAGE_SIZE")||"1536x864";
  const {width,height}=parseImageSize(size);
  const allAssets=await rest(token,"assets",{project_id:"eq."+project,limit:"200"});
  const references=allAssets.filter(a=>["reference","character_reference","style_reference","input_reference"].includes(a.asset_role)&&["image/png","image/jpeg","image/webp"].includes(a.mime_type));
  if(references.length>16)throw Error("More than 16 reference images: select a smaller project reference set");
+ if(options.reference_ids){
+  const ids=options.reference_ids;
+  if(!Array.isArray(ids)||ids.length>16||!ids.every(id=>UUID.test(id)))throw Error("Invalid project reference selection");
+  const selected=ids.length?await rest(token,"assets",{id:"in.("+ids.join(",")+")"}):[];
+  if(selected.length!==new Set(ids).size||selected.some(a=>a.asset_role!=="character_reference"))throw Error("Required character reference is unavailable");
+  for(const item of selected)if(!references.some(a=>a.id===item.id))references.push(item);
+ }
+ if(references.length>16)throw Error("Select at most 16 image references");
  const images=[];for(const ref of references)images.push({image_url:await privateImageData(token,ref)});
  const result=await requestJSON("https://api.openai.com/v1/images/"+(images.length?"edits":"generations"),
  {Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",
- {...(images.length?{images}:{}),model,prompt:prompt.slice(0,30000),size,n:1,output_format:"png"});
+ {...(images.length?{images}:{}),model,prompt:prompt.slice(0,30000),size,...(options.quality==="low"?{quality:"low"}:{}),n:1,output_format:"png"});
  const base64=result.data?.[0]?.b64_json;
  if(!base64||base64.length>50000000)throw Error("No valid image received from provider");
  const binary=atob(base64),bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
@@ -194,7 +204,7 @@ async function executeOne(token,user,s){
  await rpc(token,"cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
    const result=chosen.kind==="text"?await runText(prompt,imageData):await runImage(
-    other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token);
+    other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
    const reviewFailed=isReview&&!reviewPassed(result.text);
    await rpc(token,"cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
