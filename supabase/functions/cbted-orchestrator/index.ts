@@ -13,7 +13,11 @@ const requiredUUID=(value,label)=>{if(typeof value!=="string"||!UUID.test(value)
 async function requestJSON(url,headers={},method="GET",body=undefined){
  const resp=await fetch(url,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
  const txt=await resp.text();let payload;try{payload=txt?JSON.parse(txt):{};}catch{throw Error("Remote service returned invalid JSON");}
- if(!resp.ok)throw Error("Backend request failed ("+resp.status+"): "+String(payload.message||payload.error||"Access denied").slice(0,180));
+ if(!resp.ok){
+  const endpoint=new URL(url);
+  const code=String(payload.error?.code||payload.code||"").replace(/[^a-zA-Z0-9_-]/g,"").slice(0,80);
+  throw Error(`Request to ${endpoint.host}${endpoint.pathname} failed (HTTP ${resp.status}${code?", "+code:""})`);
+ }
  return payload;
 }
 async function identity(request){
