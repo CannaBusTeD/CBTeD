@@ -87,9 +87,9 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const manuscript=latest(["writing_proofread","writing_rewrite","writing_draft"]);
  const reviewedVersion=(s.attempts||[]).find(x=>x.step_key==="writing_proofread"&&x.status==="passed"&&x.output_text);
  const revisionSource=step.key==="writing_rewrite" && reviewedVersion ? reviewedVersion.output_text : null;
- const source=revisionSource || original || manuscript || latest(["idea_refine","idea_develop"]) || s.run.instructions;
+ const source=original || s.run.instructions;
  const history=(s.attempts||[]).filter(x=>x.step_key==="writing_review" && /^VERDICT:\s*REPAIR/i.test(x.output_text||"")).slice(0,1);
- const handoff=JSON.stringify({dependencies:step.depends_on,completed:inputs,manuscript_under_revision:revisionSource,recorded_approvals:latestDecisions(s.approvals),review_feedback:history.map(x=>x.output_text)});
+ const handoff=JSON.stringify({dependencies:step.depends_on,completed:step.agent==="writing_reviewer"?[]:inputs,current_manuscript:revisionSource || manuscript,manuscript_under_revision:revisionSource,recorded_approvals:latestDecisions(s.approvals),review_feedback:step.agent==="writing_reviewer"?[]:history.map(x=>x.output_text)});
  const task=modelInstruction(step,rulebook,projectRules,source,handoff,s.run.instructions);
  const originalProduction=!s.run.source_version_id && ["idea_to_publish","idea_to_publish_audio","writing","song_video","song_video_publish"].includes(s.run.workflow);
  const editorialAuthority=originalProduction ? "\\nYou are developing an original commissioned work. Within the authorised stage, the assigned specialist chooses the strongest editorial and staging options. Suggestions from earlier agents are advisory, not creator mandates. The creator brief and exact hook take precedence over additions by previous agents. Do not ask the creator to choose between draft variants. If an invented line conflicts with the brief, remove it. Return the full working version after rewrite or proofread." : "";
@@ -208,6 +208,7 @@ async function executeOne(token,user,s){
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
  const isReview=["writing_reviewer","image_reviewer"].includes(chosen.agent);
+ if(chosen.agent==="writing_reviewer")prompt+="\nJudge only the current manuscript against the creator brief and applicable rules. A line the creator explicitly requires is fixed. Check each named performer actually delivers the requested hook. Request repairs only for a concrete material problem present in this manuscript. A hypothetical risk, lack of a compliance statement, or a preference in an earlier agent draft is not a defect.";
  if(isReview)prompt+="\n\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Return a verdict and findings only. If the manuscript is present, any editorial defect must receive REPAIR with actionable instructions. BLOCKED is only for missing or unreadable source material. The reviewer never rewrites. Completion of steps is not proof of quality.";
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
