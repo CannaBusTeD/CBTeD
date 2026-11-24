@@ -1,6 +1,7 @@
 // CBTeD authenticated orchestration gateway. GitHub is the code source of truth.
 // Native ChatGPT tools cannot be intercepted here. Backend-managed execution IS gated.
 import {AGENTS,buildPlan,authorisation,modelInstruction,parseImageSize,reviewPassed} from "../_shared/production.mjs";
+import {inspectAudio,readReviewAudio} from "../_shared/audio-review.mjs";
 const ROOT=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function key(){
@@ -175,6 +176,19 @@ function configuredRunId(){
  const value=Deno.env.get("CBTED_PAID_RUN_ID")?.trim();
  return value && UUID.test(value) ? value : null;
 }
+async function reviewSoundtrack(token,s,step,rulebook,projectRules){
+ const generated=s.steps.find(x=>step.depends_on.includes(x.step_key) && x.kind==="audio" && x.status==="passed");
+ if(!generated?.asset_id)throw Error("Approved soundtrack asset is missing");
+ const [asset]=await rest(token,"assets",{id:"eq."+generated.asset_id,project_id:"eq."+s.run.project_id,limit:"1"});
+ if(!asset?.storage_path)throw Error("Private soundtrack was not found in this project");
+ const secret=Deno.env.get("OPENAI_API_KEY");
+ if(!secret)throw Error("Audio inspection provider is not configured");
+ const path=asset.storage_path.split("/").map(encodeURIComponent).join("/");
+ const response=await fetch(ROOT+"/storage/v1/object/authenticated/cbted-project-assets/"+path,{headers:{apikey:key(),Authorization:"Bearer "+token}});
+ const audio=await readReviewAudio(response,asset.mime_type);
+ const brief={instructions:s.run.instructions,direction:s.steps.find(x=>x.step_key==="audio_direction" && x.status==="passed")?.output_text,manuscript:s.steps.find(x=>x.step_key==="writing_proofread" && x.status==="passed")?.output_text};
+ return inspectAudio({audio,brief,rules:rulebook+"\n"+projectRules,assetId:asset.id,model:Deno.env.get("CBTED_AUDIO_REVIEW_MODEL")||"gpt-audio-1.5",request:body=>requestJSON("https://api.openai.com/v1/chat/completions",{Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",body)});
+}
 async function executeOne(token,user,s){
  if(Deno.env.get("CBTED_ALLOW_PAID_GENERATION")!=="true" && configuredRunId()!==s.run.id)throw Error("Paid model execution is disabled");
  const cap=Number(Deno.env.get("CBTED_MAX_PAID_STEPS_PER_RUN")||0);
@@ -194,7 +208,7 @@ async function executeOne(token,user,s){
  if(chosen.kind==="publish"||chosen.agent==="publish_verifier")
    return {executed:false,blocked:[{step:chosen.key,reason:"Publishing to platforms is not connected yet. Nothing was posted."}]};
  if(!["text","image"].includes(chosen.kind))return {executed:false,blocked:[{step:chosen.key,reason:"No configured backend adapter for "+chosen.kind+"; actual generation required"}]};
- if(["audio_reviewer","video_reviewer","release_auditor"].includes(chosen.agent))
+ if(["video_reviewer","release_auditor"].includes(chosen.agent))
    return {executed:false,blocked:[{step:chosen.key,reason:"Cannot honestly review actual audio/video without a media-inspection adapter"}]};
  const actual=s.steps.find(x=>x.step_key===chosen.key);
  const other=s.steps.filter(x=>x.status==="passed");
@@ -210,7 +224,7 @@ async function executeOne(token,user,s){
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
  if(chosen.agent==="writing_synthesizer")prompt+="\nYou are the editor responsible for implementing the requested repairs yourself on the supplied working manuscript. Required changes are your assignment, not missing inputs. Return the full revised text as artifact. For original commissions use the creator brief to resolve editorial choices.";
- const isReview=["writing_reviewer","image_reviewer"].includes(chosen.agent);
+ const isReview=["writing_reviewer","image_reviewer","audio_reviewer"].includes(chosen.agent);
  if(chosen.agent==="writing_reviewer")prompt+="\nJudge only the current manuscript against the creator brief and applicable rules. A line the creator explicitly requires is fixed. Check each named performer actually delivers the requested hook. Request repairs only for a concrete material problem present in this manuscript. A hypothetical risk, lack of a compliance statement, or a preference in an earlier agent draft is not a defect.";
  if(chosen.agent==="writing_reviewer")prompt+="\n\nPerform an independent, sceptical full-result review. Check the exact source and every Lyric Master constraint, including meaning, sung phrasing and synthetic construction. VERDICT: PASS only when no material faults remain. Otherwise start exactly VERDICT: REPAIR and describe specific lines, failure mechanisms and repair instructions. Return a verdict and findings only. If the manuscript is present, any editorial defect must receive REPAIR with actionable instructions. BLOCKED is only for missing or unreadable source material. The reviewer never rewrites. Completion of steps is not proof of quality.";
  if(chosen.agent==="image_reviewer")prompt+="\nInspect the attached generated image against its approved visual prompt, creator brief and visual rules. Return PASS when the image meets the requirements, REPAIR with specific visible defects when it does not, or BLOCKED when the image cannot be inspected.";
@@ -219,13 +233,16 @@ async function executeOne(token,user,s){
    :null;
  await rpc(token,"cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
-   const result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
+   let result;
+   if(chosen.agent==="audio_reviewer"){
+     result=await reviewSoundtrack(token,s,chosen,rulebook,projectRules);
+   }else result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
    const reviewFailed=isReview&&!reviewPassed(result.text);
    await rpc(token,"cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
     p_text:result.text||null,p_asset:result.asset_id||null,
-    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,check:"provider_returned_and_recorded"}
+    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),check:"provider_returned_and_recorded"}
    });
    const hasRewriteStage=s.steps.some(step=>step.step_key==="writing_rewrite");
    if(reviewFailed && chosen.key==="writing_review" && hasRewriteStage && /^VERDICT:\s*REPAIR/i.test(result.text)){
