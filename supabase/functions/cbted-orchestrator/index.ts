@@ -189,7 +189,8 @@ async function reviewSoundtrack(token,s,step,rulebook,projectRules){
  const brief={instructions:s.run.instructions,direction:s.steps.find(x=>x.step_key==="audio_direction" && x.status==="passed")?.output_text,manuscript:s.steps.find(x=>x.step_key==="writing_proofread" && x.status==="passed")?.output_text};
  return inspectAudio({audio,brief,rules:rulebook+"\n"+projectRules,assetId:asset.id,model:Deno.env.get("CBTED_AUDIO_REVIEW_MODEL")||"gpt-audio-1.5",request:body=>requestJSON("https://api.openai.com/v1/chat/completions",{Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",body)});
 }
-async function executeOne(token,user,s){
+async function executeOne(token,user,s,delegatedOperation=null){
+ const mutate=delegatedOperation || ((name,params)=>rpc(token,name,params));
  if(Deno.env.get("CBTED_ALLOW_PAID_GENERATION")!=="true" && configuredRunId()!==s.run.id)throw Error("Paid model execution is disabled");
  const cap=Number(Deno.env.get("CBTED_MAX_PAID_STEPS_PER_RUN")||0);
  if(!Number.isInteger(cap)||cap<1||cap>200)throw Error("Set an explicit safe CBTED_MAX_PAID_STEPS_PER_RUN (1..200)");
@@ -205,6 +206,9 @@ async function executeOne(token,user,s){
   if(verdict.allowed){chosen=step;break;}blocked.push({step:step.key,reason:verdict.reason});
  }
  if(!chosen)return {executed:false,blocked};
+ if(delegatedOperation && (chosen.kind!=="text" || !["core","writing","audio","visual","animation"].includes(chosen.studio) || ["image_reviewer","audio_reviewer","video_reviewer","release_auditor"].includes(chosen.agent))){
+   return {executed:false,blocked:[{step:chosen.key,reason:"This stage requires a media or release handoff outside editorial delegation"}]};
+ }
  if(chosen.kind==="publish"||chosen.agent==="publish_verifier")
    return {executed:false,blocked:[{step:chosen.key,reason:"Publishing to platforms is not connected yet. Nothing was posted."}]};
  if(!["text","image"].includes(chosen.kind))return {executed:false,blocked:[{step:chosen.key,reason:"No configured backend adapter for "+chosen.kind+"; actual generation required"}]};
@@ -231,7 +235,7 @@ async function executeOne(token,user,s){
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
    :null;
- await rpc(token,"cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
+ await mutate("cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
    let result;
    if(chosen.agent==="audio_reviewer"){
@@ -239,7 +243,7 @@ async function executeOne(token,user,s){
    }else result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
    const reviewFailed=isReview&&!reviewPassed(result.text);
-   await rpc(token,"cbted_finish_production_step",{
+   await mutate("cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
     p_text:result.text||null,p_asset:result.asset_id||null,
     p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),check:"provider_returned_and_recorded"}
@@ -252,15 +256,35 @@ async function executeOne(token,user,s){
         return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"The revision returned the same manuscript. Inspect the repair feedback before retrying."};
       }
       try{
-        await rpc(token,"cbted_retry_production_step",{p_run:s.run.id,p_step:chosen.key});
+        await mutate("cbted_retry_production_step",{p_run:s.run.id,p_step:chosen.key});
         return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:true};
       }catch(e){return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:String(e.message||e).slice(0,240)};}
     }
     return {executed:true,step:chosen.key,kind:chosen.kind,asset_id:result.asset_id||null,review_failed:reviewFailed};
  }catch(e){
-   await rpc(token,"cbted_finish_production_step",{p_run:s.run.id,p_step:chosen.key,p_result:"failed",p_evidence:{reason:String(e.message||e).slice(0,300)}}).catch(()=>{});
+   await mutate("cbted_finish_production_step",{p_run:s.run.id,p_step:chosen.key,p_result:"failed",p_evidence:{reason:String(e.message||e).slice(0,300)}}).catch(()=>{});
    throw e;
  }
+}
+async function delegatedNext(body){
+ const runId=requiredUUID(body.run_id,"run");
+ if(typeof body.credential!=="string" || !/^[a-f0-9]{64}$/.test(body.credential))throw Error("Invalid run delegation");
+ const service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+ if(!service)throw Error("Delegation service is unavailable");
+ const operation=(args)=>requestJSON(ROOT+"/rest/v1/rpc/cbted_delegated_stage",dbHeaders(service),"POST",{p_run:runId,p_secret:body.credential,...args});
+ const scope=await operation({p_action:"scope"});
+ const snapshot=await state(service,runId);
+ if(snapshot.run.project_id!==scope.project_id)throw Error("Run delegation scope changed");
+ let ticket=null;
+ async function mutate(name,params){
+  if(params.p_run!==runId)throw Error("Mismatched run");
+  const step=params.p_step;
+  if(name==="cbted_claim_production_step"){ticket=await operation({p_action:"claim",p_step:step});return;}
+  if(name==="cbted_finish_production_step"){await operation({p_action:"finish",p_step:step,p_ticket:ticket,p_result:params.p_result,p_text:params.p_text||null,p_evidence:params.p_evidence});return;}
+  if(name==="cbted_retry_production_step"){await operation({p_action:"retry",p_step:step});return;}
+  throw Error("Unsupported operation");
+ }
+ return executeOne(service,scope.owner_id,snapshot,mutate);
 }
 Deno.serve(async(request)=>{
  if(request.method==="OPTIONS")return json({},204);
@@ -268,10 +292,21 @@ Deno.serve(async(request)=>{
  if(request.method==="GET"&&path==="health")return json({name:"CBTeD Orchestrator",status:"online",global_provider_execution_enabled:Deno.env.get("CBTED_ALLOW_PAID_GENERATION")==="true",provider_execution_enabled:Deno.env.get("CBTED_ALLOW_PAID_GENERATION")==="true" || Boolean(configuredRunId())});
  if(request.method!=="POST")return json({error:"POST required"},405);
  try{
-  const user=await identity(request);
+
   if(Number(request.headers.get("content-length")||0)>300000)return json({error:"Body too large"},413);
   const body=await request.json();
   if(!body||typeof body!=="object"||Array.isArray(body))throw Error("Invalid request");
+  if(path==="delegated-next"){
+   try{return json(await delegatedNext(body));}
+   catch(e){return json({error:String(e.message||"Delegated continuation unavailable").slice(0,320)},400);}
+  }
+  const user=await identity(request);
+  if(path==="delegation-enable" || path==="delegation-revoke"){
+   const run_id=requiredUUID(body.run_id,"run");
+   const credential=path==="delegation-enable" ? Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,"0")).join("") : null;
+   await requestJSON(ROOT+"/rest/v1/rpc/cbted_set_run_delegation",dbHeaders(user.token),"POST",{p_run:run_id,p_secret:credential});
+   return json(credential?{run_id,credential}:{run_id,revoked:true});
+  }
   if(path==="plan"){
    const plan=preview(body);
    if(body.intent!=="execute")return json({...plan,created:false,executed:false});
