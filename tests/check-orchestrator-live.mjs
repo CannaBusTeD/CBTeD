@@ -5,7 +5,7 @@ assert.equal(controller.status,200,"Live orchestrator must respond to GET /healt
 const health=await controller.json();
 assert.equal(health.name,"CBTeD Orchestrator");
 assert.equal(health.status,"online");
-assert.equal(health.provider_execution_enabled,false,"Production must remain disabled by default");
+assert.equal(health.global_provider_execution_enabled,false,"Production must remain disabled by default");
 const blocked=await fetch(url+"/plan",{
  method:"POST",headers:{"content-type":"application/json"},
  body:JSON.stringify({workflow:"visual",intent:"execute",instructions:"Unsafe unauthenticated attempt"}),
