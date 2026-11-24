@@ -135,8 +135,12 @@ async function runImage(prompt,user,project,token){
  {project_id:project,asset_role:"generated",filename:id+".png",storage_path:path,mime_type:"image/png",width,height,metadata:{provider:"openai-images",model,reference_asset_ids:references.map(a=>a.id)}});
  return {asset_id:asset?.[0]?.id,provider:"openai-images",model};
 }
+function configuredRunId(){
+ const value=Deno.env.get("CBTED_PAID_RUN_ID")?.trim();
+ return value && UUID.test(value) ? value : null;
+}
 async function executeOne(token,user,s){
- if(Deno.env.get("CBTED_ALLOW_PAID_GENERATION")!=="true")throw Error("Paid model execution is disabled");
+ if(Deno.env.get("CBTED_ALLOW_PAID_GENERATION")!=="true" && configuredRunId()!==s.run.id)throw Error("Paid model execution is disabled");
  const cap=Number(Deno.env.get("CBTED_MAX_PAID_STEPS_PER_RUN")||0);
  if(!Number.isInteger(cap)||cap<1||cap>200)throw Error("Set an explicit safe CBTED_MAX_PAID_STEPS_PER_RUN (1..200)");
  const attempted=s.steps.reduce((n,x)=>n+(x.attempt_number||0),0);
@@ -199,7 +203,7 @@ async function executeOne(token,user,s){
 Deno.serve(async(request)=>{
  if(request.method==="OPTIONS")return json({},204);
  const path=new URL(request.url).pathname.split("/").pop();
- if(request.method==="GET"&&path==="health")return json({name:"CBTeD Orchestrator",status:"online",provider_execution_enabled:Deno.env.get("CBTED_ALLOW_PAID_GENERATION")==="true"});
+ if(request.method==="GET"&&path==="health")return json({name:"CBTeD Orchestrator",status:"online",provider_execution_enabled:Deno.env.get("CBTED_ALLOW_PAID_GENERATION")==="true" || Boolean(configuredRunId())});
  if(request.method!=="POST")return json({error:"POST required"},405);
  try{
   const user=await identity(request);
