@@ -65,7 +65,7 @@ function latestDecisions(approvals){
 }
 function planFromState(s){
  return {intent:s.run.intent,workflow:s.run.workflow,steps:s.steps.map((x,i)=>({
-   key:x.step_key,agent:x.agent,studio:x.studio,kind:x.kind,depends_on:x.depends_on,approval_required:x.approval_required,sequence:i+1
+   key:x.step_key,agent:x.agent,description:AGENTS[x.agent]?.role,studio:x.studio,kind:x.kind,depends_on:x.depends_on,approval_required:x.approval_required,sequence:i+1
  }))};
 }
 function preview(body){
@@ -81,9 +81,16 @@ async function fullRulebook(studio){
  return payload.documents.map(d=>"SOURCE "+d.path+" SHA "+d.sha+"\n"+d.content).join("\n\n");
 }
 function takePrompt(s,step,rulebook,original,projectRules){
- const previous=s.steps.filter(x=>x.status==="passed").map(x=>({stage:x.step_key,text:x.output_text?.slice(0,20000)||"",asset_id:x.asset_id||null}));
- const history=(s.attempts||[]).slice(0,16).map(x=>({step:x.step_key,attempt:x.attempt_number,status:x.status,text:(x.output_text||"").slice(0,8000)}));
-  return modelInstruction(step,rulebook,projectRules,original,JSON.stringify({verified_steps:previous,previous_attempts:history}),s.run.instructions);
+ const completed=s.steps.filter(x=>x.status==="passed");
+ const inputs=completed.map(x=>({stage:x.step_key,artifact:x.output_text||null,asset_id:x.asset_id||null}));
+ const latest=(keys)=>[...completed].reverse().find(x=>keys.includes(x.step_key)&&x.output_text)?.output_text;
+ const manuscript=latest(["writing_proofread","writing_rewrite","writing_draft"]);
+ const source=original || manuscript || latest(["idea_refine","idea_develop"]) || s.run.instructions;
+ const history=(s.attempts||[]).filter(x=>x.step_key==="writing_review" && /^VERDICT:\s*REPAIR/i.test(x.output_text||"")).slice(0,1);
+ const handoff=JSON.stringify({dependencies:step.depends_on,completed:inputs,review_feedback:history.map(x=>x.output_text)});
+ const task=modelInstruction(step,rulebook,projectRules,source,handoff,s.run.instructions);
+ return task+"\nThe backend has already retrieved the project and stage state above. For a new work the saved brief authorizes an original draft. Treat generated manuscripts as working versions. Use the exact manuscript above for editorial tasks. Draft, rewrite and proofread must return the complete resulting manuscript. Critique and audit return findings. Complete only your assigned stage. Return status complete with the actual deliverable, or blocked with the missing prerequisite in reason. Never mark a request for input complete.";
+
 }
 async function privateImageData(token,asset){
  if(!asset||!["image/png","image/jpeg","image/webp"].includes(asset.mime_type))throw Error("Unsupported private reference image");
@@ -106,11 +113,13 @@ async function runText(prompt,imageDataUrl=null){
  if(!secret||!model)throw Error("Text provider is not configured");
  const result=await requestJSON("https://api.openai.com/v1/responses",
  {Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",
- {model,store:false,input:[{role:"user",content:[{type:"input_text",text:prompt},...(imageDataUrl?[{type:"input_image",image_url:imageDataUrl,detail:"high"}]:[])]}],max_output_tokens:8000});
+ {model,store:false,text:{format:{type:"json_schema",name:"stage_result",strict:true,schema:{type:"object",additionalProperties:false,properties:{status:{type:"string",enum:["complete","blocked"]},artifact:{type:"string"},reason:{type:"string"}},required:["status","artifact","reason"]}}},input:[{role:"user",content:[{type:"input_text",text:prompt},...(imageDataUrl?[{type:"input_image",image_url:imageDataUrl,detail:"high"}]:[])]}],max_output_tokens:8000});
  if(result.status!=="completed")throw Error("Text provider did not complete");
  const text=result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||"";
  if(!text.trim())throw Error("Text provider returned no content");
- return {text,provider:"openai-responses",model,response_id:result.id};
+ const stage=JSON.parse(text);
+ if(stage.status!=="complete" || !stage.artifact?.trim() || stage.reason?.trim())throw Error("Stage did not produce a deliverable: "+String(stage.reason||"empty artifact").slice(0,230));
+ return {text:stage.artifact,provider:"openai-responses",model,response_id:result.id};
 }
 async function runImage(prompt,user,project,token){
  const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_IMAGE_MODEL");
