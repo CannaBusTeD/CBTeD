@@ -72,3 +72,9 @@ A saved handoff or task is a record, **not** evidence that an image or video has
 ## Next action
 
 After CI passes, merge the orchestration feature branch and verify the new GitHub Pages UI. Configure the GitHub Actions deployment credential, refresh the CBTeD plugin tool manifest if needed, then perform an authenticated disposable-project end-to-end test. Connect real paid model APIs only after explicit cost and provider review. Audio/video and final assembly remain future integrations.
+
+## Credit spending and creative sign-off
+
+Unattended spending defaults to zero. Refine the creative brief and reuse suitable existing assets before requesting a paid generation. For video, review the actual image, character continuity, framing, timing and final motion prompt. Choose the lowest-cost settings that meet the brief.
+
+Show the owner the final inputs, provider, model, duration or size, output count and exact credit cost. An unknown cost or an unresolved creative issue pauses the handoff. Approval covers one specific job and one attempt. A retry, variant, upscale, changed input, provider switch or top-up requires fresh approval. Reconcile uncertain provider submissions before considering another attempt. Paid connectivity checks require explicit approval.
