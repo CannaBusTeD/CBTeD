@@ -229,8 +229,16 @@ function mediaType(bytes,type){
  if(type==="audio/mp4"&&bytes.length>16&&String.fromCharCode(...bytes.slice(4,8))==="ftyp")return "m4a";
  throw Error("Returned media does not match a supported image/video/audio file signature");
 }
+async function mediaDigest(bytes){
+ const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
+ return Array.from(hash,byte=>byte.toString(16).padStart(2,"0")).join("");
+}
+function importedReceipt(job){
+ return {job_id:job.id,status:job.status,asset_id:job.result_asset_id,message:"Media already imported."};
+}
 async function importResult(user,body){
  const job=await ownedJob(user,body.job_id);
+ if(job.result_asset_id)return importedReceipt(job);
  if(job.status!=="submitted")throw Error("Verify a submitted provider task before importing media");
  const url=permittedMediaUrl(body.result_url,job.provider);
  const timeout=AbortSignal.timeout(30000);
@@ -244,20 +252,37 @@ async function importResult(user,body){
  const data=new Uint8Array(await remote.arrayBuffer());
  if(!data.length||data.length>limit)throw Error("Imported file is empty or too large");
  const extension=mediaType(data,type);
- const assetId=crypto.randomUUID();
+ const digest=await mediaDigest(data);
+ const reservation=type+":"+digest;
+ const filter={id:"eq."+job.id,owner_id:"eq."+user,status:"eq.submitted"};
+ const reserved=await db("cbted_media_jobs","PATCH",{...filter,import_digest:"is.null"},{import_digest:reservation});
+ if(!reserved?.length){
+  const current=await ownedJob(user,job.id);
+  if(current.result_asset_id)return importedReceipt(current);
+  if(current.status!=="submitted"||current.import_digest!==reservation)throw Error("Another media result is reserved for this job");
+ }
+ const assetId=job.id;
  const path=user+"/"+job.project_id+"/"+job.kind+"s/"+assetId+"."+extension;
  const storageUrl=ROOT+"/storage/v1/object/"+BUCKET+"/"+path;
  const uploaded=await fetch(storageUrl,{method:"POST",headers:{apikey:SERVICE,Authorization:"Bearer "+SERVICE,"Content-Type":type,"x-upsert":"false"},body:data});
- if(!uploaded.ok)throw Error("Private Supabase media upload failed");
+ if(!uploaded.ok){
+  const stored=await fetch(ROOT+"/storage/v1/object/authenticated/"+BUCKET+"/"+path,{headers:{apikey:SERVICE,Authorization:"Bearer "+SERVICE}});
+  if(!stored.ok||await mediaDigest(await stored.arrayBuffer())!==digest)throw Error("Private Supabase media upload failed");
+ }
  const record=(await db("assets","POST",{},{
-  project_id:job.project_id,asset_role:"generated",
+  id:assetId,project_id:job.project_id,asset_role:"generated",
   filename:assetId+"."+extension,storage_path:path,mime_type:type,
   metadata:{generator:job.provider,model:job.model,job_id:job.id,provider_job_id:job.provider_job_id}
- }))?.[0];
+ },"resolution=ignore-duplicates,return=representation"))?.[0] || await ownedAsset(job.project_id,assetId,job.kind);
+ if(record.storage_path!==path||record.metadata?.job_id!==job.id)throw Error("Reserved asset does not match the job");
  if(!record?.id)throw Error("Provider media uploaded but asset record failed; contact support");
  const rows=await db("cbted_media_jobs","PATCH",{id:"eq."+job.id,owner_id:"eq."+user,status:"eq.submitted"},{
   result_asset_id:record.id,status:"needs_review",updated_at:new Date().toISOString()});
- if(!rows?.[0])throw Error("Job changed before media could be linked");
+ if(!rows?.[0]){
+  const current=await ownedJob(user,job.id);
+  if(current.result_asset_id===record.id)return importedReceipt(current);
+  throw Error("Job changed before media could be linked");
+ }
  await audit(user,job.id,"imported",{asset_id:record.id,bytes:data.byteLength,mime_type:type});
  return {job_id:job.id,status:"needs_review",asset_id:record.id,bytes:data.byteLength,
   message:"Real private media saved. Creative review required before completion."};
