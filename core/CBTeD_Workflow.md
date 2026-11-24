@@ -81,3 +81,9 @@ CBTeD specifics
 - Enforce a separate audit state for **requested → preflight passed → submitted → generated → inspected → creator-approved → delivered**. Never collapse these states or declare completion from a thumbnail, contact sheet or a queued job.
 - Store reusable general lessons in studio rules/code; store character identities and creative choices as private project-specific corrections, never as global identity defaults. Do not publish private reference photographs to the public source repository.
 - These checks are enforceable on CBTeD-managed workflows only. Native external tools outside the CBTeD gateway cannot be intercepted, and must be checked through their real responses rather than assumed compliant.
+
+## Applying confirmed corrections
+
+When the owner confirms a general workflow correction, update every affected implementation, interface, test, instruction and deployed rulebook. Trace each affected entry point and check the released version. Record what changed and identify any surface still pending. Keep private assets and project-specific creative decisions within their project.
+
+Ordinary publishing within a provider's free allowance requires approval for the exact post, destination accounts and timing. Free posting has no monetary spending-limit requirement. Stop when the free allowance is exhausted. A retry requires fresh publication approval. Paid generation still requires review of the selected inputs and explicit approval for the quoted cost of that attempt. Unattended credit spending is zero.
