@@ -93,7 +93,9 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const task=modelInstruction(step,rulebook,projectRules,source,handoff,s.run.instructions);
  const originalProduction=!s.run.source_version_id && ["idea_to_publish","idea_to_publish_audio","writing","song_video","song_video_publish"].includes(s.run.workflow);
  const editorialAuthority=originalProduction ? "\\nYou are developing an original commissioned work. Within the authorised stage, the assigned specialist chooses the strongest editorial and staging options. Suggestions from earlier agents are advisory, not creator mandates. The creator brief and exact hook take precedence over additions by previous agents. Do not ask the creator to choose between draft variants. If an invented line conflicts with the brief, remove it. Return the full working version after rewrite or proofread." : "";
- return task+editorialAuthority+"\nThe backend has already retrieved the project and stage state above. For a new work the saved brief authorizes an original draft. Treat generated manuscripts as working versions. Use the exact manuscript above for editorial tasks. Draft, rewrite and proofread must return the complete resulting manuscript. Critique and audit return findings. Complete only your assigned stage. Return status complete with the actual deliverable, or blocked with the missing prerequisite in reason. Never mark a request for input complete.";
+ const editingText=revisionSource || manuscript || original;
+ const attachment=["writing_proofreader","writing_reviewer","writing_synthesizer"].includes(step.agent) && editingText ? "\n\nBEGIN EXACT MANUSCRIPT\n"+editingText+"\nEND EXACT MANUSCRIPT" : "";
+ return task+editorialAuthority+"\nThe backend has already retrieved the project and stage state above. For a new work the saved brief authorizes an original draft. Treat generated manuscripts as working versions. Use the exact manuscript above for editorial tasks. Draft, rewrite and proofread must return the complete resulting manuscript. Critique and audit return findings. Complete only your assigned stage. Return status complete with the actual deliverable, or blocked with the missing prerequisite in reason. Never mark a request for input complete."+attachment;
 
 }
 async function privateImageData(token,asset){
@@ -216,7 +218,7 @@ async function executeOne(token,user,s){
    :null;
  await rpc(token,"cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
-   const result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
+   const result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
    const reviewFailed=isReview&&!reviewPassed(result.text);
    await rpc(token,"cbted_finish_production_step",{
