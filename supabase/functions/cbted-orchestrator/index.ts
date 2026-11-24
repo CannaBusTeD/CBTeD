@@ -227,7 +227,13 @@ async function executeOne(token,user,s){
     p_text:result.text||null,p_asset:result.asset_id||null,
     p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,check:"provider_returned_and_recorded"}
    });
-   if(reviewFailed&&chosen.key==="writing_review"&&(s.run.workflow==="writing_rewrite" || (s.run.id===configuredRunId() && /^VERDICT:\s*REPAIR/i.test(result.text)))){
+   const hasRewriteStage=s.steps.some(step=>step.step_key==="writing_rewrite");
+   if(reviewFailed && chosen.key==="writing_review" && hasRewriteStage && /^VERDICT:\s*REPAIR/i.test(result.text)){
+      const current=s.steps.find(step=>step.step_key==="writing_proofread")?.output_text?.trim();
+      const previous=s.attempts.find(step=>step.step_key==="writing_proofread" && step.status==="passed")?.output_text?.trim();
+      if(current && current===previous){
+        return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"The revision returned the same manuscript. Inspect the repair feedback before retrying."};
+      }
       try{
         await rpc(token,"cbted_retry_production_step",{p_run:s.run.id,p_step:chosen.key});
         return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:true};
