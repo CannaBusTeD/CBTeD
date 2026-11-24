@@ -1,0 +1,3 @@
+-- Successful manuscripts can be revised after a later review. Failed retries remain limited by claim/retry.
+alter table public.production_steps drop constraint production_steps_attempt_number_check, add constraint production_steps_attempt_number_check check(attempt_number between 0 and case when step_key in ('writing_rewrite','writing_proofread') then 10 else 5 end);
+alter table public.production_step_attempts drop constraint production_step_attempts_attempt_number_check, add constraint production_step_attempts_attempt_number_check check(attempt_number between 1 and case when step_key in ('writing_rewrite','writing_proofread') then 10 else 5 end);
