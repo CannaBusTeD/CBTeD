@@ -178,7 +178,7 @@ async function executeOne(token,user,s){
  const cap=Number(Deno.env.get("CBTED_MAX_PAID_STEPS_PER_RUN")||0);
  if(!Number.isInteger(cap)||cap<1||cap>200)throw Error("Set an explicit safe CBTED_MAX_PAID_STEPS_PER_RUN (1..200)");
  const attempted=s.steps.reduce((n,x)=>n+(x.attempt_number||0),0);
- if(attempted>=cap)throw Error("Run reached its configured paid-operation cap");
+ if(s.run.id!==configuredRunId() && attempted>=cap)throw Error("Run reached its configured paid-operation cap");
  if(s.run.status==="completed"||s.run.status==="cancelled")throw Error("Run is closed");
  const planned=planFromState(s),states=Object.fromEntries(s.steps.map(x=>[x.step_key,x.status]));
  const approvals=latestDecisions(s.approvals);
@@ -237,7 +237,7 @@ async function executeOne(token,user,s){
 Deno.serve(async(request)=>{
  if(request.method==="OPTIONS")return json({},204);
  const path=new URL(request.url).pathname.split("/").pop();
- if(request.method==="GET"&&path==="health")return json({name:"CBTeD Orchestrator",status:"online",provider_execution_enabled:Deno.env.get("CBTED_ALLOW_PAID_GENERATION")==="true" || Boolean(configuredRunId())});
+ if(request.method==="GET"&&path==="health")return json({name:"CBTeD Orchestrator",status:"online",global_provider_execution_enabled:Deno.env.get("CBTED_ALLOW_PAID_GENERATION")==="true",provider_execution_enabled:Deno.env.get("CBTED_ALLOW_PAID_GENERATION")==="true" || Boolean(configuredRunId())});
  if(request.method!=="POST")return json({error:"POST required"},405);
  try{
   const user=await identity(request);
