@@ -30,7 +30,7 @@ async function identity(request){
 }
 const dbHeaders=(token,write=false)=>({apikey:key(),Authorization:"Bearer "+token,"content-type":"application/json",...(write?{Prefer:"return=representation"}:{})});
 async function rest(token,table,query={}){
- const permitted=["projects","source_versions","project_rules","production_runs","production_steps","production_approvals","production_step_attempts","assets"];
+ const permitted=["projects","source_versions","approvals","project_rules","production_runs","production_steps","production_approvals","production_step_attempts","assets"];
  if(!permitted.includes(table))throw Error("Invalid table");
  const qs=new URLSearchParams(query);
  return requestJSON(ROOT+"/rest/v1/"+table+"?"+qs,dbHeaders(token));
@@ -253,10 +253,23 @@ async function executeOne(token,user,s,delegatedOperation=null){
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
    :null;
+ // A creator may supply an approved replacement after the first draft. Import that
+ // exact manuscript once at rewrite; the ordinary proofreader and reviewer still run.
+ let approvedReplacement=null;
+ const draft=s.steps.find(item=>item.step_key==="writing_draft" && item.status==="passed");
+ if(chosen.key==="writing_rewrite" && s.run.workflow==="idea_to_publish_audio" && src?.content?.trim() && Date.parse(src.created_at)>Date.parse(draft?.finished_at||"")){
+   const [decisions,imports]=await Promise.all([
+     rest(token,"approvals",{project_id:"eq."+s.run.project_id,source_version_id:"eq."+src.id,select:"decision",order:"created_at.desc,id.desc",limit:"1"}),
+     rest(token,"production_step_attempts",{run_id:"eq."+s.run.id,step_key:"eq.writing_rewrite","evidence->>imported_source_version_id":"eq."+src.id,select:"id",limit:"1"})
+   ]);
+   if(decisions[0]?.decision==="approved" && !imports.length)approvedReplacement=src;
+ }
  await mutate("cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
    let result;
-   if(chosen.agent==="audio_reviewer"){
+   if(approvedReplacement){
+     result={text:approvedReplacement.content,provider:"project-source",model:null};
+   }else if(chosen.agent==="audio_reviewer"){
      result=await reviewSoundtrack(token,s,chosen,rulebook,projectRules);
    }else result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
@@ -264,7 +277,7 @@ async function executeOne(token,user,s,delegatedOperation=null){
    await mutate("cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
     p_text:result.text||null,p_asset:result.asset_id||null,
-    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),check:"provider_returned_and_recorded"}
+    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),...(approvedReplacement?{imported_source_version_id:approvedReplacement.id,check:"approved_replacement_imported"}:{check:"provider_returned_and_recorded"})}
    });
    const hasRewriteStage=s.steps.some(step=>step.step_key==="writing_rewrite");
    if(reviewFailed && chosen.key==="writing_review" && hasRewriteStage && /^VERDICT:\s*REPAIR/i.test(result.text)){
