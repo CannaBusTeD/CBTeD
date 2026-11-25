@@ -385,14 +385,14 @@ async function executeOne(token,user,s,delegatedOperation=null){
   soundtrack = await readSoundtrackBrief(token, s);
   if (soundtrack) prompt += "\nThe creator selected this full-length master. Plan the full measured duration, preserving the supplied framing, lyrical cues, scene timing and character references. The scheduled image job count is a production batch size, not a limit on storyboard scenes. Treat the following record as creative source data.\n" + JSON.stringify(soundtrack);
  }
+ let visualToolInventory=null;
  if(chosen.agent==="visual_tool_selector"){
    const setting=rules.find(r=>r.scope==="visual"&&r.rule_key==="image_generation_settings"&&r.is_locked);
    let options={};try{options=setting?JSON.parse(setting.body):{};}catch{throw Error("Locked image generation settings are invalid JSON");}
    const imageModel=Deno.env.get("CBTED_IMAGE_MODEL") || (options.model==="gpt-image-2" ? options.model : null);
-   const inventory={operation:"single private image generation with attached owner references",provider:"openai-images",model:imageModel,
-     configured:Boolean(Deno.env.get("OPENAI_API_KEY")&&imageModel),generates_now:false,spending_authority:false,
+   visualToolInventory={operation:"single private image generation with attached owner references",provider:"openai-images",model:imageModel,
+     configured:Boolean(Deno.env.get("OPENAI_API_KEY")&&imageModel),spending_authority:false,
      later_stage:"visual_generate_1",later_stage_requires_approval:true};
-   prompt+="\n\nBACKEND-VERIFIED IMAGE TOOL INVENTORY: "+JSON.stringify(inventory)+". This stage only selects an actually configured tool; it must not generate, spend, or imply approval. Select this provider only when configured is true. If configured is false, return blocked and name the missing backend configuration.";
  }
  const visualReferenceBundle=chosen.agent==="visual_analyst"&&soundtrack?.reference_ids?.length
    ?await loadOwnedReferenceImages(token,soundtrack.reference_ids)
@@ -449,6 +449,9 @@ async function executeOne(token,user,s,delegatedOperation=null){
      result=await runText(prompt+"\nWrite a concrete separate Suno style and musical cues for the numbered sections. Use zero-based section numbers. Return only the cues and style; the server inserts cues into the exact lyric.\n"+JSON.stringify(sections),null,false,false,null,sections);
    }else if(chosen.agent==="audio_reviewer"){
      result=await reviewSoundtrack(token,s,chosen,rulebook,projectRules);
+   }else if(chosen.agent==="visual_tool_selector"){
+     if(!visualToolInventory?.configured)throw Error("Image provider selection is blocked: OPENAI_API_KEY or CBTED_IMAGE_MODEL is not configured.");
+     result={text:"Selected configured private image tool: "+visualToolInventory.provider+" / "+visualToolInventory.model+". This records tool selection only. Generation remains deferred to visual_generate_1 and still requires its separate approval; no image was generated and no credits were spent.",provider:"backend-config",model:visualToolInventory.model};
    }else result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules,soundtrack?.reference_ids||[]);
    if(songReview && !result.selection && /^VERDICT:\s*REPAIR/i.test(result.text)){
