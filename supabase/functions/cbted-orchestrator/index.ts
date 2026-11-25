@@ -79,7 +79,14 @@ async function fullRulebook(studio){
  if(result.error||result.result?.isError)throw Error("Full master/studio rules unavailable");
  const payload=result.result?.structuredContent||JSON.parse(result.result?.content?.[0]?.text||"{}");
  if(!Array.isArray(payload.documents)||!payload.documents.some(d=>d.path==="core/CBTeD_Workflow.md"))throw Error("Master source missing");
- return payload.documents.map(d=>"SOURCE "+d.path+" SHA "+d.sha+"\n"+d.content).join("\n\n");
+ const required=studio==="visual"
+   ?["core/CBTeD_Workflow.md","visual/Visual_Studio.md","visual/sources/Image_Generation_Workflow.md","visual/Visual_Studio_Operating_Procedure.md"]
+   :["core/CBTeD_Workflow.md"];
+ const missing=required.filter(path=>!payload.documents.some(d=>d.path===path&&typeof d.content==="string"&&d.content.trim()));
+ if(missing.length)throw Error("Complete rulebook source missing: "+missing.join(", "));
+ const manifest=payload.documents.map(d=>({path:d.path,sha:d.sha,characters:d.content.length}));
+ return "BACKEND-VERIFIED COMPLETE AUTHORITATIVE RULEBOOK BUNDLE. The backend retrieved the full pinned contents before this stage. Required source files are present and embedded below. Do not claim that these rules are unavailable and do not ask the creator to supply them again. Manifest: "+JSON.stringify(manifest)+"\n\n"+
+   payload.documents.map(d=>"SOURCE "+d.path+" SHA "+d.sha+"\n"+d.content).join("\n\n");
 }
 function takePrompt(s,step,rulebook,original,projectRules){
  const completed=s.steps.filter(x=>x.status==="passed");
