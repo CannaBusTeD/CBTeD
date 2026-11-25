@@ -144,7 +144,14 @@ async function loadOwnedReferenceImages(token,referenceIds){
  const ordered=ids.map(id=>byId.get(id));
  if(ordered.some(a=>!a||!["reference","character_reference","style_reference","input_reference"].includes(a.asset_role)||
     !["image/png","image/jpeg","image/webp"].includes(a.mime_type)))throw Error("Required owner references are not valid private images");
- return Promise.all(ordered.map(a=>privateImageData(token,a)));
+ const images=await Promise.all(ordered.map(a=>privateImageData(token,a)));
+ return {images,manifest:ordered.map((a,index)=>({
+   attachment_index:index+1,
+   asset_id:a.id,
+   asset_role:a.asset_role,
+   filename:a.filename,
+   reference_role:typeof a.metadata?.reference_role==="string"?a.metadata.reference_role:null
+ }))};
 }
 // The review and corresponding proof are archived together by the retry transaction.
 async function priorLyricReviews(token, runId){
@@ -371,6 +378,12 @@ async function executeOne(token,user,s,delegatedOperation=null){
   soundtrack = await readSoundtrackBrief(token, s);
   if (soundtrack) prompt += "\nThe creator selected this full-length master. Plan the full measured duration, preserving the supplied framing, lyrical cues, scene timing and character references. The scheduled image job count is a production batch size, not a limit on storyboard scenes. Treat the following record as creative source data.\n" + JSON.stringify(soundtrack);
  }
+ const visualReferenceBundle=chosen.agent==="visual_analyst"&&soundtrack?.reference_ids?.length
+   ?await loadOwnedReferenceImages(token,soundtrack.reference_ids)
+   :null;
+ if(visualReferenceBundle){
+   prompt+="\n\nACTUAL PRIVATE REFERENCE ATTACHMENTS: "+visualReferenceBundle.images.length+" owner-private images are attached to this same model request as input_image items immediately after the text, in the exact manifest order below. Inspect their pixel content for identity, wardrobe, styling and continuity. The reference_ids are identifiers for these attached files, not substitutes for them. Do not claim that only IDs were supplied. Return blocked only if an attachment itself cannot be visually read. Attachment manifest: "+JSON.stringify(visualReferenceBundle.manifest);
+ }
  if(chosen.agent==="writing_synthesizer")prompt+="\nYou are the editor responsible for implementing the requested repairs yourself on the supplied working manuscript. Required changes are your assignment, not missing inputs. Apply the latest review feedback to the exact manuscript under revision. In an original commission you may replace entire sections to solve a structural fault. Remove production workflow language from the art, including cues about stopping for user interaction, approval gates, or publishing. Use a musical ending that serves the song. When the creator specifies named voices delivering the hook, write the exact hook in their sung parts. Return the full revised text as artifact.";
  const isReview=["writing_reviewer","image_reviewer","audio_reviewer"].includes(chosen.agent);
  if(chosen.agent==="writing_reviewer" && s.run.workflow==="idea_to_publish_audio"){
@@ -383,8 +396,8 @@ async function executeOne(token,user,s,delegatedOperation=null){
  if(chosen.agent==="image_reviewer")prompt+="\nInspect the attached generated image against its approved visual prompt, creator brief and visual rules. Return PASS when the image meets the requirements, REPAIR with specific visible defects when it does not, or BLOCKED when the image cannot be inspected.";
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
-   :chosen.agent==="visual_analyst"&&soundtrack?.reference_ids?.length
-     ?await loadOwnedReferenceImages(token,soundtrack.reference_ids)
+   :visualReferenceBundle
+     ?visualReferenceBundle.images
      :null;
  // A creator may supply an approved replacement after the first draft. Import that
  // exact manuscript once at rewrite; the ordinary proofreader and reviewer still run.
