@@ -36,7 +36,7 @@ async function rest(token,table,query={}){
  return requestJSON(ROOT+"/rest/v1/"+table+"?"+qs,dbHeaders(token));
 }
 async function rpc(token,name,params){
- const permitted=["cbted_prepare_production","cbted_decide_production_step","cbted_claim_production_step","cbted_finish_production_step","cbted_retry_production_step"];
+ const permitted=["cbted_prepare_production","cbted_decide_production_step","cbted_claim_production_step","cbted_finish_production_step","cbted_retry_production_step","cbted_repair_invalid_visual_prompt"];
  if(!permitted.includes(name))throw Error("Invalid RPC");
  return requestJSON(ROOT+"/rest/v1/rpc/"+name,dbHeaders(token,true),"POST",params);
 }
@@ -115,7 +115,8 @@ function takePrompt(s,step,rulebook,original,projectRules){
    language_auditor:"Return the language audit with exact evidence from the current manuscript.",
    writing_author:"Return the complete first working manuscript.",
    writing_proofreader:"Return the complete proofread manuscript.",
-   writing_synthesizer:"Return the complete revised manuscript."
+   writing_synthesizer:"Return the complete revised manuscript.",
+   visual_prompt_writer:"Return the complete standalone production prompt for exactly one separate 9:16 image. Ground it in the selected storyboard scene, the full-song visual analysis, the exact creator brief, and the attached character-reference manifest. Specify subject identity and continuity, action, environment, camera position and lens, composition, lighting, colour, texture, emotional meaning, aspect ratio, and an explicit no-text rule unless this is the designated title frame. The prompt must be self-contained and detailed enough for the selected image provider. Never return a stage name, heading, placeholder, summary, or prompt-writing plan in place of the actual production prompt."
  }[step.agent]||"";
  if(songWorkflow && ["audio_direction","audio_select_tool"].includes(step.key)){
    if(!manuscript)throw Error("A reviewed manuscript is required for music direction");
@@ -474,6 +475,11 @@ async function executeOne(token,user,s,delegatedOperation=null){
        }
      }
    }
+   if(chosen.agent==="visual_prompt_writer"){
+     const productionPrompt=String(result.text||"").trim();
+     if(productionPrompt===chosen.key || productionPrompt.length<200)
+       throw Error("Visual prompt writer returned an incomplete placeholder instead of the standalone production prompt");
+   }
    const reviewFailed=isReview&&!result.selection&&!reviewPassed(result.text);
    await mutate("cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
@@ -588,6 +594,10 @@ Deno.serve(async(request)=>{
   if(path==="retry"){
    await requireRun(user.token,body.run_id);
    return json({retried:await rpc(user.token,"cbted_retry_production_step",{p_run:body.run_id,p_step:body.step_key})});
+  }
+  if(path==="repair-invalid-prompt"){
+   await requireRun(user.token,body.run_id);
+   return json({repaired:await rpc(user.token,"cbted_repair_invalid_visual_prompt",{p_run:body.run_id,p_step:body.step_key})});
   }
   return json({error:"Unknown action"},404);
  }catch(e){return json({error:String(e?.message||"Action rejected").slice(0,350)},400);}
