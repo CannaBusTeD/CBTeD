@@ -81,10 +81,10 @@ For new songs AND expressly requested complete rewrites of user-supplied songs, 
         preserved.
     4. Rewrite. Start from the frozen draft and the recommendations, not from memory. Produce a
         complete new version.
-    5. Re-critique the complete rewritten version for meaning, structure, synthetic phrasing, exact banned habits, cadence, and the source's intentions. If material faults remain, return to recommendations and rewrite. Repeat the separate critique → recommendations → rewrite → critique cycle until a defensible pass or an honestly disclosed blocker; a cosmetic edit is never a pass.
-    6. Sing-through check. Run it in your head for meaning, breath, stress, vowel placement and flow. If a real fault remains, return to the stage that owns it. Keep prior attempts and their specific failed findings.
+    5. Review the complete manuscript for meaning, structure, synthetic phrasing, banned habits, cadence, and the creator’s intentions. Count completed whole-song reviews on the same run. Three is the maximum. A pass may finish the work earlier. Preserve each reviewed draft and its findings.
+    6. Check breath, stress, vowel placement and flow. After the third review, the writer and reviewer jointly select the strongest eligible reviewed draft. Both weigh the exact texts, state their reasons, and pass the selected words and performance notes to music. A recurring unchanged fault or a locked creator decision may trigger selection earlier. Preserve the outstanding criticism and both votes. A missing source or a conflict that leaves no eligible draft still needs resolution.
 
-Deliver the rewritten version, never draft one. Call it approved only when the author approves it. If a
+Deliver the exact reviewed version selected for handoff. Call it approved only when the author approves it. If a
 thumbnail was requested, submit it once the concept is stable, then check it still fits the final lyric.
 
 This gate applies to author-supplied lyrics only when the client explicitly asks for a full rewrite or complete editorial run. It does not apply to critique-only, suggestions-only, formatting-only, proofreading-only, or narrowly scoped edits. Preserve the original source and all approvals; revised versions remain proposals until the author explicitly approves them.
