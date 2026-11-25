@@ -101,18 +101,74 @@ function safeStoragePath(path: string): boolean {
   return !/[\\?#%]/.test(path) && path.split("/").every(segment => segment && segment !== "." && segment !== "..");
 }
 
-function parseAnalysis(raw: unknown): { duration_seconds: number; bpm: number; beat_times_seconds: number[]; method: string; raw: Record<string, unknown> } | null {
+function medianBpmFromBeats(beats: number[]): number | null {
+  if (beats.length < 2) return null;
+  const deltas: number[] = [];
+  for (let i = 1; i < beats.length; i++) {
+    const d = (beats[i] ?? 0) - (beats[i - 1] ?? 0);
+    if (d > 0.15 && d < 3.5) deltas.push(d);
+  }
+  if (!deltas.length) return null;
+  deltas.sort((a, b) => a - b);
+  const mid = Math.floor(deltas.length / 2);
+  const median = deltas.length % 2 === 1 ? deltas[mid]! : (deltas[mid - 1]! + deltas[mid]!) / 2;
+  const bpm = Math.round((60 / median) * 100) / 100;
+  return bpm >= 20 && bpm <= 300 ? bpm : null;
+}
+
+function parseAnalysis(raw: unknown, expectedSongId: string): { duration_seconds: number; bpm: number; beat_times_seconds: number[]; method: string; raw: Record<string, unknown> } | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
+  const declaredId = typeof obj["audio_id"] === "string" && obj["audio_id"].trim() ? obj["audio_id"].trim() : null;
+  if (declaredId && declaredId !== expectedSongId) throw new Error("analysis.audio_id does not match selected_full_song_id");
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : typeof v === "string" && v.trim() && Number(v) > 0 ? Number(v) : null);
-  const duration = num(obj["duration_seconds"] ?? obj["durationSeconds"] ?? obj["duration_s"] ?? obj["duration"]);
-  const bpm = num(obj["bpm"] ?? obj["tempo_bpm"] ?? obj["tempo"]);
-  const rawBeats = Array.isArray(obj["beat_times_seconds"]) ? obj["beat_times_seconds"] : Array.isArray(obj["beat_times"]) ? obj["beat_times"] : Array.isArray(obj["beats"]) ? obj["beats"] : [];
-  const beats = rawBeats.map((v) => typeof v === "object" && v !== null ? v.time_s : v).map((value) => typeof value === "number" || (typeof value === "string" && value.trim()) ? Number(value) : NaN).filter((v) => Number.isFinite(v) && v >= 0);
-  if (!duration || !bpm || beats.length < 2) return null;
+  const nonNeg = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : typeof v === "string" && v.trim() && Number(v) >= 0 ? Number(v) : null);
+  const duration = num(obj["duration_s"] ?? obj["duration_seconds"] ?? obj["durationSeconds"] ?? obj["duration"]);
+  const rawBeats = Array.isArray(obj["beats"]) ? obj["beats"] : Array.isArray(obj["beat_times_seconds"]) ? obj["beat_times_seconds"] : Array.isArray(obj["beat_times"]) ? obj["beat_times"] : [];
+  const beats: number[] = [];
+  for (const item of rawBeats) {
+    if (typeof item === "number" || typeof item === "string") {
+      const t = nonNeg(item);
+      if (t === null) return null;
+      beats.push(t);
+    } else if (item && typeof item === "object" && !Array.isArray(item)) {
+      const b = item as Record<string, unknown>;
+      const t = nonNeg(b["time_s"] ?? b["time_seconds"] ?? b["time"]);
+      if (t === null) return null;
+      beats.push(t);
+    } else {
+      return null;
+    }
+  }
+  if (!duration || beats.length < 2) return null;
   if (beats.some((t, i) => t > duration || (i > 0 && t <= (beats[i - 1] ?? t)))) return null;
+  const bpm = num(obj["bpm"] ?? obj["tempo_bpm"] ?? obj["tempo"]) ?? medianBpmFromBeats(beats);
+  if (!bpm) return null;
   const method = typeof obj["method"] === "string" && obj["method"].trim() ? obj["method"].trim() : "prepared_analysis";
   return { duration_seconds: duration, bpm, beat_times_seconds: beats, method, raw: obj };
+}
+
+function parseLyricAlignment(raw: unknown, expectedSongId: string): { unit: "words" | "lines" | "none"; count: number; raw: unknown } {
+  if (raw === undefined || raw === null) return { unit: "none", count: 0, raw: null };
+  if (Array.isArray(raw)) return { unit: raw.length ? "lines" : "none", count: raw.length, raw };
+  if (typeof raw !== "object") throw new Error("Invalid lyric_alignment structure");
+  const obj = raw as Record<string, unknown>;
+  const declaredId = typeof obj["audio_id"] === "string" && obj["audio_id"].trim() ? obj["audio_id"].trim() : null;
+  if (declaredId && declaredId !== expectedSongId) throw new Error("lyric_alignment.audio_id does not match selected_full_song_id");
+  if (Array.isArray(obj["words"])) {
+    for (const item of obj["words"]) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("Invalid aligned word entry");
+      const w = item as Record<string, unknown>;
+      const start = Number(w["start_s"] ?? w["start_seconds"] ?? w["start"]);
+      const end = Number(w["end_s"] ?? w["end_seconds"] ?? w["end"]);
+      if (typeof w["word"] !== "string" || !Number.isFinite(start) || start < 0 || !Number.isFinite(end) || end < start) {
+        throw new Error("Invalid aligned word timing");
+      }
+    }
+    return { unit: obj["words"].length ? "words" : "none", count: obj["words"].length, raw: obj };
+  }
+  if (Array.isArray(obj["lines"])) return { unit: obj["lines"].length ? "lines" : "none", count: obj["lines"].length, raw: obj };
+  return { unit: "none", count: 0, raw: obj };
 }
 
 function extractLockedManuscript(steps: Array<Record<string, unknown>>): string | null {
@@ -345,12 +401,9 @@ export function createMasterImportHandler(env: MasterImportEnv, fetchImpl: typeo
         const lockedLyrics = extractLockedManuscript(steps || []);
         if (!lockedLyrics) throw new Error("Canonical reviewed manuscript is not locked");
 
-        const timing = payload["analysis"] as Record<string, unknown> | null;
-        const alignment = payload["lyric_alignment"] as Record<string, unknown> | null;
-        if ((timing?.audio_id && timing.audio_id !== songId) || (alignment?.audio_id && alignment.audio_id !== songId))
-          throw new Error("Timing or lyrics belong to another Suno recording");
-        const analysis = parseAnalysis(timing);
+        const analysis = parseAnalysis(payload["analysis"], songId);
         if (!analysis) throw new Error("Prepared handoff is missing valid measured timing analysis");
+        const lyricAlignment = parseLyricAlignment(payload["lyric_alignment"], songId);
 
         // 1. Reuse existing private matching MP3 asset FIRST (0 remote downloads).
         let verified: { asset: Record<string, unknown>; sha256: string; bytes: number } | null = null;
@@ -480,7 +533,7 @@ export function createMasterImportHandler(env: MasterImportEnv, fetchImpl: typeo
         const receiptId = `${receiptHash.slice(0, 8)}-${receiptHash.slice(8, 12)}-5${receiptHash.slice(13, 16)}-a${receiptHash.slice(17, 20)}-${receiptHash.slice(20, 32)}`;
         const receiptPath = `${ownerId}/${projectId}/master-handoffs/${receiptId}.json`;
         const lyricsSha256 = await sha256Hex(new TextEncoder().encode(lockedLyrics));
-        const lyricAlignment = Array.isArray(alignment) ? alignment : Array.isArray(alignment?.words) ? alignment.words : Array.isArray(alignment?.lines) ? alignment.lines : [];
+        // Alignment was validated against the selected master above.
         const proposedScenes = Array.isArray(payload["proposed_scenes"]) ? payload["proposed_scenes"] : [];
         const receiptMeta = {
           studio_master_handoff_v1: true,
@@ -504,7 +557,10 @@ export function createMasterImportHandler(env: MasterImportEnv, fetchImpl: typeo
             lyrics: lockedLyrics,
             method: analysis.method,
           },
-          lyric_alignment_count: lyricAlignment.length,
+          lyric_alignment_unit: lyricAlignment.unit,
+          ...(lyricAlignment.unit === "words" ? { aligned_word_count: lyricAlignment.count } : {}),
+          ...(lyricAlignment.unit === "lines" ? { aligned_line_count: lyricAlignment.count } : {}),
+          lyric_alignment_count: lyricAlignment.count,
           proposed_scenes_count: proposedScenes.length,
           reference_ids: verifiedRefs.map((r) => r.id),
           reference_projects: verifiedRefs.map((r) => ({ id: r.id, project_id: r.project_id })),
@@ -512,7 +568,7 @@ export function createMasterImportHandler(env: MasterImportEnv, fetchImpl: typeo
         const receiptDoc = new TextEncoder().encode(JSON.stringify({
           ...receiptMeta,
           analysis: analysis.raw,
-          lyric_alignment: lyricAlignment,
+          lyric_alignment: lyricAlignment.raw,
           proposed_scenes: proposedScenes,
           approved_lyrics: lockedLyrics,
         }));
@@ -576,8 +632,8 @@ export function createMasterImportHandler(env: MasterImportEnv, fetchImpl: typeo
           attachment_asset_id: receiptId,
           reused_existing_asset: reusedExisting,
           reference_count: verifiedRefs.length,
-          job_status: "needs_review",
-          next_stage: "audio_review",
+          job_status: ["completed","passed"].includes(String(job.status)) ? job.status : "needs_review",
+          next_stage: ["completed","passed"].includes(String(job.status)) ? "audio_review" : "audio_generate",
           published: false,
           message: "Master MP3 verified and immutable handoff receipt attached. Rejoined normal canonical review.",
         });
