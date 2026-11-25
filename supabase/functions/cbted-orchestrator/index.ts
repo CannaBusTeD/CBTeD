@@ -385,6 +385,15 @@ async function executeOne(token,user,s,delegatedOperation=null){
   soundtrack = await readSoundtrackBrief(token, s);
   if (soundtrack) prompt += "\nThe creator selected this full-length master. Plan the full measured duration, preserving the supplied framing, lyrical cues, scene timing and character references. The scheduled image job count is a production batch size, not a limit on storyboard scenes. Treat the following record as creative source data.\n" + JSON.stringify(soundtrack);
  }
+ if(chosen.agent==="visual_tool_selector"){
+   const setting=rules.find(r=>r.scope==="visual"&&r.rule_key==="image_generation_settings"&&r.is_locked);
+   let options={};try{options=setting?JSON.parse(setting.body):{};}catch{throw Error("Locked image generation settings are invalid JSON");}
+   const imageModel=Deno.env.get("CBTED_IMAGE_MODEL") || (options.model==="gpt-image-2" ? options.model : null);
+   const inventory={operation:"single private image generation with attached owner references",provider:"openai-images",model:imageModel,
+     configured:Boolean(Deno.env.get("OPENAI_API_KEY")&&imageModel),generates_now:false,spending_authority:false,
+     later_stage:"visual_generate_1",later_stage_requires_approval:true};
+   prompt+="\n\nBACKEND-VERIFIED IMAGE TOOL INVENTORY: "+JSON.stringify(inventory)+". This stage only selects an actually configured tool; it must not generate, spend, or imply approval. Select this provider only when configured is true. If configured is false, return blocked and name the missing backend configuration.";
+ }
  const visualReferenceBundle=chosen.agent==="visual_analyst"&&soundtrack?.reference_ids?.length
    ?await loadOwnedReferenceImages(token,soundtrack.reference_ids)
    :null;
