@@ -86,17 +86,22 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const inputs=completed.map(x=>({stage:x.step_key,artifact:x.output_text||null,asset_id:x.asset_id||null}));
  const latest=(keys)=>[...completed].reverse().find(x=>keys.includes(x.step_key)&&x.output_text)?.output_text;
  const manuscript=latest(["writing_proofread","writing_rewrite","writing_draft"]);
- const reviewedVersion=(s.attempts||[]).find(x=>x.step_key==="writing_proofread"&&x.status==="passed"&&x.output_text);
+ const draftStart=completed.find(x=>x.step_key==="writing_draft")?.started_at;
+ const currentAttempts=(s.attempts||[]).filter(x=>!draftStart || Date.parse(x.recorded_at)>=Date.parse(draftStart));
+ const reviewedVersion=currentAttempts.find(x=>x.step_key==="writing_proofread"&&x.status==="passed"&&x.output_text);
  const revisionSource=step.key==="writing_rewrite" && reviewedVersion ? reviewedVersion.output_text : null;
  const source=original || s.run.instructions;
- const history=(s.attempts||[]).filter(x=>x.step_key==="writing_review" && /^VERDICT:\s*REPAIR/i.test(x.output_text||"")).slice(0,1);
- const handoff=JSON.stringify({dependencies:step.depends_on,completed:["writing_reviewer","writing_proofreader"].includes(step.agent)?[]:inputs,current_manuscript:revisionSource || manuscript,manuscript_under_revision:revisionSource,recorded_approvals:latestDecisions(s.approvals),review_feedback:step.agent==="writing_synthesizer"?history.map(x=>x.output_text):[]});
+ const history=currentAttempts.filter(x=>x.step_key==="writing_review" && /^VERDICT:\s*REPAIR/i.test(x.output_text||"")).slice(0,1);
+ const handoff=JSON.stringify({dependencies:step.depends_on,planned_image_count:s.steps.filter(x=>x.agent==='image_generator').length,planned_clip_count:s.steps.filter(x=>x.agent==='video_generator').length,completed:["writing_reviewer","writing_proofreader"].includes(step.agent)?[]:inputs,current_manuscript:revisionSource || manuscript,manuscript_under_revision:revisionSource,recorded_approvals:latestDecisions(s.approvals),review_feedback:step.agent==="writing_synthesizer"?history.map(x=>x.output_text):[]});
  const task=modelInstruction(step,rulebook,projectRules,source,handoff,s.run.instructions);
  const originalProduction=!s.run.source_version_id && ["idea_to_publish","idea_to_publish_audio","writing","song_video","song_video_publish"].includes(s.run.workflow);
  const editorialAuthority=originalProduction ? "\nYou are developing an original commissioned work. Within the authorised stage, the assigned specialist chooses the strongest editorial and staging options. Suggestions from earlier agents are advisory, not creator mandates. The creator brief and exact hook take precedence over additions by previous agents. Do not ask the creator to choose between draft variants. If an invented line conflicts with the brief, remove it. Return the full working version after rewrite or proofread." : "";
  const editingText=revisionSource || manuscript || original;
  const attachment=["writing_proofreader","writing_reviewer","writing_synthesizer"].includes(step.agent) && editingText ? "\n\nBEGIN EXACT MANUSCRIPT\n"+editingText+"\nEND EXACT MANUSCRIPT" : "";
- return task+editorialAuthority+"\nThe backend has already retrieved the project and stage state above. For a new work the saved brief authorizes an original draft. Treat generated manuscripts as working versions. Use the exact manuscript above for editorial tasks. Draft, rewrite and proofread must return the complete resulting manuscript. Critique and audit return findings. Complete only your assigned stage. Return status complete with the actual deliverable, or blocked with the missing prerequisite in reason. Never mark a request for input complete."+attachment;
+ const songWorkflow=["idea_to_publish_audio","song_video","song_video_publish"].includes(s.run.workflow);
+ const songDirection=songWorkflow && step.studio==="writing" ? "\nWrite and review the complete song requested by the brief. A quoted hook can recur across developed verses and refrains. A short target duration is flexible when the brief permits it. Keep arrangement packaging for audio_direction." : "";
+ const sunoPackage=songWorkflow && step.key==="audio_direction" ? "\nPreserve the reviewed lyric verbatim. Return separate Suno lyrics and style fields. The lyrics field must fit 5000 characters including bracketed arrangement and performance cues throughout. Match the explicit genre, voices and project palette. Include only supported optional settings." : "";
+ return task+editorialAuthority+songDirection+sunoPackage+"\nThe backend has already retrieved the project and stage state above. For a new work the saved brief authorizes an original draft. Treat generated manuscripts as working versions. Use the exact manuscript above for editorial tasks. Draft, rewrite and proofread must return the complete resulting manuscript. Critique and audit return findings. Complete only your assigned stage. Return status complete with the actual deliverable, or blocked with the missing prerequisite in reason. Never mark a request for input complete."+attachment;
 
 }
 async function privateImageData(token,asset){

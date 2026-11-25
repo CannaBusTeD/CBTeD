@@ -77,11 +77,18 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
     writingLast=add("writing_proofread","writing_proofreader",[writingLast]);
     writingLast=add("writing_review","writing_reviewer",[writingLast]);
   }
+  let audioLast=null;
+  if(["audio","song_video","song_video_publish","idea_to_publish_audio"].includes(workflow)){
+    audioLast=add("audio_direction","audio_director",writingLast?[writingLast]:[]);
+    audioLast=add("audio_select_tool","audio_tool_selector",[audioLast]);
+    audioLast=add("audio_generate","audio_generator",[audioLast],true);
+    audioLast=add("audio_review","audio_reviewer",[audioLast]);
+  }
   let storyLast=null;
-  if(["idea_to_publish","idea_to_publish_audio"].includes(workflow))storyLast=add("story_storyboard","scene_storyboarder",[writingLast]);
+  if(["idea_to_publish","idea_to_publish_audio"].includes(workflow))storyLast=add("story_storyboard","scene_storyboarder",audioLast?[writingLast,audioLast]:[writingLast]);
   let visualLast=null;
   if(["visual","song_video","song_video_publish","idea_to_publish","idea_to_publish_audio"].includes(workflow)){
-    const before=storyLast||writingLast;
+    const before=storyLast||audioLast||writingLast;
     let last=add("visual_analysis","visual_analyst",before?[before]:[]);
     last=add("visual_select_tool","visual_tool_selector",[last]);
     for(let i=1;i<=image_count;i++){
@@ -90,13 +97,6 @@ export function buildPlan({workflow,intent="plan",image_count=1,video_count=1}={
       last=add("visual_review_"+i,"image_reviewer",[image]);
     }
     visualLast=last;
-  }
-  let audioLast=null;
-  if(["audio","song_video","song_video_publish","idea_to_publish_audio"].includes(workflow)){
-    audioLast=add("audio_direction","audio_director",writingLast?[writingLast]:[]);
-    audioLast=add("audio_select_tool","audio_tool_selector",[audioLast]);
-    audioLast=add("audio_generate","audio_generator",[audioLast],true);
-    audioLast=add("audio_review","audio_reviewer",[audioLast]);
   }
   let releaseLast=null;
   if(["animation","animation_publish","song_video","song_video_publish","idea_to_publish","idea_to_publish_audio"].includes(workflow)){
