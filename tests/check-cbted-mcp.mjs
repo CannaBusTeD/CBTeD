@@ -90,9 +90,15 @@ const lyricPayload=JSON.parse(writingRules.result.content[0].text);
 assert.equal(lyricPayload.documents.length,3,"Writing rules must load core, writing and lyric master");
 const gate=lyricPayload.documents.find(d=>d.path==="writing/Writing_Studio.md");
 assert.ok(gate,"Dedicated editorial gate must be present");
-for(const phase of ["Critique.","Recommendations.","Rewrite.","Re-critique"]){assert.ok(gate.content.includes(phase),"Missing required stage: "+phase);}
-assert.ok(gate.content.indexOf("Critique.")<gate.content.indexOf("Recommendations."));
-assert.ok(gate.content.indexOf("Recommendations.")<gate.content.indexOf("Rewrite."));
+const editorialGate = gate.content.split("Full-song editorial gate")[1]?.split("Prose and fiction")[0];
+assert.ok(editorialGate, "Full-song editorial gate must be present");
+let previousPhase = -1;
+for (const phase of ["Critique.", "Recommendations.", "Rewrite.", "Review the complete manuscript", "writer and reviewer jointly select"]) {
+  const position = editorialGate.indexOf(phase);
+  assert.ok(position > previousPhase, "Missing or out-of-order editorial stage: " + phase);
+  previousPhase = position;
+}
+assert.match(editorialGate, /Three is the maximum\./);
 assert.equal(networkCalls,0,"Reading public bundled rules must not access private APIs");
 const blocked=await rpc("tools/call",{name:"cbted_list_projects",arguments:{}});
 assert.equal(blocked.result.isError,true);
