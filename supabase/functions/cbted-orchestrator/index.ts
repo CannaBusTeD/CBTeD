@@ -265,6 +265,16 @@ async function executeOne(token,user,s,delegatedOperation=null){
    if(reviewFailed && chosen.key==="writing_review" && hasRewriteStage && /^VERDICT:\s*REPAIR/i.test(result.text)){
       const current=s.steps.find(step=>step.step_key==="writing_proofread")?.output_text?.trim();
       const previous=s.attempts.find(step=>step.step_key==="writing_proofread" && step.status==="passed")?.output_text?.trim();
+      // A rewritten manuscript can retain the very same fault despite other edits.
+      const draftStart=s.steps.find(step=>step.step_key==="writing_draft")?.started_at;
+      const lastReview=s.attempts.find(step=>step.step_key==="writing_review" && step.status==="failed" && (!draftStart||Date.parse(step.recorded_at)>=Date.parse(draftStart)));
+      const normalize=text=>String(text||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim();
+      const quotedLines=text=>Array.from(String(text||"").matchAll(/["“]([^"”\n]{15,240})["”]/g),m=>normalize(m[1])).filter(line=>line.split(" ").length>=5);
+      const priorQuotes=new Set(quotedLines(lastReview?.output_text));
+      const retainedFault=quotedLines(result.text).some(line=>priorQuotes.has(line) && normalize(current).includes(line) && !normalize(s.run.instructions).includes(line));
+      if(retainedFault){
+        return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"Two reviews flagged the same surviving lyric passage. Inspect the cited passage before spending on another revision."};
+      }
       if(current && current===previous){
         return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"The revision returned the same manuscript. Inspect the repair feedback before retrying."};
       }
