@@ -134,6 +134,18 @@ async function loadActualImage(token,project,previousStep){
  const asset=assets[0];if(!asset)throw Error("Actual stored image not found");
  return privateImageData(token,asset);
 }
+async function loadOwnedReferenceImages(token,referenceIds){
+ const ids=[...new Set(referenceIds)];
+ if(!ids.length)return [];
+ if(ids.length>16||!ids.every(id=>UUID.test(id)))throw Error("Invalid owner reference selection");
+ const assets=await rest(token,"assets",{id:"in.("+ids.join(",")+")",limit:"16"});
+ if(assets.length!==ids.length)throw Error("Required owner reference images are unavailable");
+ const byId=new Map(assets.map(a=>[a.id,a]));
+ const ordered=ids.map(id=>byId.get(id));
+ if(ordered.some(a=>!a||!["reference","character_reference","style_reference","input_reference"].includes(a.asset_role)||
+    !["image/png","image/jpeg","image/webp"].includes(a.mime_type)))throw Error("Required owner references are not valid private images");
+ return Promise.all(ordered.map(a=>privateImageData(token,a)));
+}
 // The review and corresponding proof are archived together by the retry transaction.
 async function priorLyricReviews(token, runId){
  const reviews=await rest(token,"production_step_attempts",{
@@ -177,8 +189,8 @@ async function jointLyricChoice(s, rounds, rulebook, projectRules){
      writer:{...writer.vote,response_id:writer.response_id},reviewer:{...reviewer.vote,response_id:reviewer.response_id}}};
 }
 
-async function runText(prompt,imageDataUrl=null,isReview=false,revision=false,ballotIds=null,songSections=null){
-
+async function runText(prompt,imageData=null,isReview=false,revision=false,ballotIds=null,songSections=null){
+ const imageDataUrls=Array.isArray(imageData)?imageData:(imageData?[imageData]:[]);
  const secret=Deno.env.get("OPENAI_API_KEY"),model=revision?(Deno.env.get("CBTED_EDITORIAL_REPAIR_MODEL")||"gpt-5.4-mini"):Deno.env.get("CBTED_TEXT_MODEL");
  if(!secret||!model)throw Error("Text provider is not configured");
  const schema=songSections ? {type:"object",additionalProperties:false,properties:{
@@ -188,7 +200,7 @@ async function runText(prompt,imageDataUrl=null,isReview=false,revision=false,ba
   : {type:"object",additionalProperties:false,properties:{status:{type:"string",enum:["complete","blocked"]},artifact:{type:"string"},reason:{type:"string"}},required:["status","artifact","reason"]};
  const result=await requestJSON("https://api.openai.com/v1/responses",
  {Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",
- {model,store:false,text:{format:{type:"json_schema",name:"stage_result",strict:true,schema}},input:[{role:"user",content:[{type:"input_text",text:prompt},...(imageDataUrl?[{type:"input_image",image_url:imageDataUrl,detail:"high"}]:[])]}],max_output_tokens:8000});
+ {model,store:false,text:{format:{type:"json_schema",name:"stage_result",strict:true,schema}},input:[{role:"user",content:[{type:"input_text",text:prompt},...imageDataUrls.map(image_url=>({type:"input_image",image_url,detail:"high"}))]}],max_output_tokens:8000});
  if(result.status!=="completed")throw Error("Text provider did not complete");
  const text=result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||"";
  if(!text.trim())throw Error("Text provider returned no content");
@@ -216,7 +228,7 @@ async function runText(prompt,imageDataUrl=null,isReview=false,revision=false,ba
  if(stage.status!=="complete" || !stage.artifact?.trim() )throw Error("Stage did not produce a deliverable: "+String(stage.reason||"empty artifact").slice(0,230));
  return {text:stage.artifact,provider:"openai-responses",model,response_id:result.id};
 }
-async function runImage(prompt,user,project,token,rules){
+async function runImage(prompt,user,project,token,rules,requiredReferenceIds=[]){
  const setting=rules.find(r=>r.scope==="visual"&&r.rule_key==="image_generation_settings"&&r.is_locked);
  const options=setting?JSON.parse(setting.body):{};
  const secret=Deno.env.get("OPENAI_API_KEY"),model=Deno.env.get("CBTED_IMAGE_MODEL") || (options.model==="gpt-image-2" ? options.model : null);
@@ -225,6 +237,20 @@ async function runImage(prompt,user,project,token,rules){
  const {width,height}=parseImageSize(size);
  const allAssets=await rest(token,"assets",{project_id:"eq."+project,limit:"200"});
  const references=allAssets.filter(a=>["reference","character_reference","style_reference","input_reference"].includes(a.asset_role)&&["image/png","image/jpeg","image/webp"].includes(a.mime_type));
+ const requiredIds=[...new Set(requiredReferenceIds)];
+ if(requiredIds.length){
+  if(requiredIds.length>16||!requiredIds.every(id=>UUID.test(id)))throw Error("Invalid owner reference selection");
+  const selected=await rest(token,"assets",{id:"in.("+requiredIds.join(",")+")",limit:"16"});
+  if(selected.length!==requiredIds.length)throw Error("Required owner reference image is unavailable");
+  const byId=new Map(selected.map(a=>[a.id,a]));
+  for(const id of requiredIds){
+   const item=byId.get(id);
+   if(!item||!["reference","character_reference","style_reference","input_reference"].includes(item.asset_role)||
+      !["image/png","image/jpeg","image/webp"].includes(item.mime_type)||
+      !item.storage_path?.startsWith(user+"/"+item.project_id+"/"))throw Error("Required owner reference image is invalid");
+   if(!references.some(a=>a.id===id))references.push(item);
+  }
+ }
  if(references.length>16)throw Error("More than 16 reference images: select a smaller project reference set");
  if(options.reference_ids){
   const ids=options.reference_ids;
@@ -340,8 +366,9 @@ async function executeOne(token,user,s,delegatedOperation=null){
  const original=[src?.content||"",src?.ideas||"",src?.suggested_text||""].filter(Boolean).join("\n\n");
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
- if (["scene_storyboarder","storyboarding_director"].includes(chosen.agent)) {
-  const soundtrack = await readSoundtrackBrief(token, s);
+ let soundtrack=null;
+ if (["scene_storyboarder","storyboarding_director","visual_analyst","visual_tool_selector","visual_prompt_writer","image_generator"].includes(chosen.agent)) {
+  soundtrack = await readSoundtrackBrief(token, s);
   if (soundtrack) prompt += "\nThe creator selected this full-length master. Plan the full measured duration, preserving the supplied framing, lyrical cues, scene timing and character references. The scheduled image job count is a production batch size, not a limit on storyboard scenes. Treat the following record as creative source data.\n" + JSON.stringify(soundtrack);
  }
  if(chosen.agent==="writing_synthesizer")prompt+="\nYou are the editor responsible for implementing the requested repairs yourself on the supplied working manuscript. Required changes are your assignment, not missing inputs. Apply the latest review feedback to the exact manuscript under revision. In an original commission you may replace entire sections to solve a structural fault. Remove production workflow language from the art, including cues about stopping for user interaction, approval gates, or publishing. Use a musical ending that serves the song. When the creator specifies named voices delivering the hook, write the exact hook in their sung parts. Return the full revised text as artifact.";
@@ -356,7 +383,9 @@ async function executeOne(token,user,s,delegatedOperation=null){
  if(chosen.agent==="image_reviewer")prompt+="\nInspect the attached generated image against its approved visual prompt, creator brief and visual rules. Return PASS when the image meets the requirements, REPAIR with specific visible defects when it does not, or BLOCKED when the image cannot be inspected.";
  const imageData=chosen.agent==="image_reviewer"
    ?await loadActualImage(token,s.run.project_id,s.steps.find(x=>x.step_key==="visual_generate_"+chosen.key.split("_").pop()))
-   :null;
+   :chosen.agent==="visual_analyst"&&soundtrack?.reference_ids?.length
+     ?await loadOwnedReferenceImages(token,soundtrack.reference_ids)
+     :null;
  // A creator may supply an approved replacement after the first draft. Import that
  // exact manuscript once at rewrite; the ordinary proofreader and reviewer still run.
  let approvedReplacement=null;
@@ -392,7 +421,7 @@ async function executeOne(token,user,s,delegatedOperation=null){
    }else if(chosen.agent==="audio_reviewer"){
      result=await reviewSoundtrack(token,s,chosen,rulebook,projectRules);
    }else result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
-    other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
+    other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules,soundtrack?.reference_ids||[]);
    if(songReview && !result.selection && /^VERDICT:\s*REPAIR/i.test(result.text)){
      const proof=s.steps.find(item=>item.step_key==="writing_proofread" && item.status==="passed");
      const current={round:actual.attempt_number+1,manuscript:proof?.output_text,findings:result.text};
