@@ -109,7 +109,7 @@ function authError(){
  return {isError:true,content:[{type:"text",text:"CBTeD authentication required. Connect your existing CBTeD Supabase account."}],_meta:{"mcp/www_authenticate":[challenge()]}};
 }
 async function rest(token,table,query={},method="GET",body=null){
- const allowed=["projects","sources","source_versions","project_rules","assets","tasks","outputs","approvals","handoffs","studio_settings","project_runs"];
+ const allowed=["projects","sources","source_versions","project_rules","assets","tasks","outputs","approvals","handoffs","studio_settings","project_runs","production_runs","production_steps"];
  if(!allowed.includes(table))throw Error("Unsupported table");
  const qs=new URLSearchParams(query);
  const url=SUPABASE_URL+"/rest/v1/"+table+(qs.toString()?"?"+qs:"");
@@ -282,7 +282,7 @@ async function runTool(name,a,token,user){
  if(name==="cbted_get_project_context"){
    const p=await ownedProject(token,a.project_id);
    const pid=p.id;
-   const [rules,sources,versions,approvals,settings,assets,tasks,outputs,handoffs]=await Promise.all([
+   const [rules,sources,versions,approvals,settings,assets,tasks,outputs,handoffs,production_runs]=await Promise.all([
      rest(token,"project_rules",{...byProject(pid),order:"created_at.desc",limit:"100"}),
      rest(token,"sources",{...byProject(pid),order:"created_at.desc"}),
      rest(token,"source_versions",{...byProject(pid,"id,project_id,source_id,version_number,based_on_id,change_note,created_at"),order:"created_at.desc",limit:"100"}),
@@ -291,9 +291,12 @@ async function runTool(name,a,token,user){
      rest(token,"assets",{...byProject(pid),order:"created_at.desc",limit:"100"}),
      rest(token,"tasks",{...byProject(pid),order:"updated_at.desc",limit:"100"}),
      rest(token,"outputs",{...byProject(pid,"id,project_id,task_id,output_kind,sequence_index,asset_id,source_version_id,verification_status,details,created_at"),order:"created_at.desc",limit:"100"}),
-     rest(token,"handoffs",{...byProject(pid),order:"created_at.desc",limit:"50"})
+     rest(token,"handoffs",{...byProject(pid),order:"created_at.desc",limit:"50"}),
+     rest(token,"production_runs",{...byProject(pid,"id,workflow,status,created_at"),order:"created_at.desc,id.desc",limit:"20"})
    ]);
-   return {project:p,rules,sources,source_versions:versions,approvals,studio_settings:settings,assets,tasks,outputs,handoffs,note:"Read exact writing with cbted_get_source_version. Read full master rules using cbted_get_rulebook. Output metadata alone is not evidence of generated media."};
+   const latestRun=production_runs[0];
+   const production_steps=latestRun ? await rest(token,"production_steps",{...byProject(pid,"run_id,step_key,sequence_index,status,attempt_number,asset_id"),run_id:"eq."+latestRun.id,order:"sequence_index.asc",limit:"200"}) : [];
+   return {project:p,production_runs,production_steps,rules,sources,source_versions:versions,approvals,studio_settings:settings,assets,tasks,outputs,handoffs,note:"For production manuscripts and run evidence use cbted_get_production_status with the run ID. Read saved source versions with cbted_get_source_version. Read full master rules using cbted_get_rulebook. Output metadata alone is not evidence of generated media."};
  }
  if(name==="cbted_get_source_version"){
    await ownedProject(token,a.project_id);requireUUID(a.source_version_id,"source_version_id");
