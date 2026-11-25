@@ -256,18 +256,24 @@ async function executeOne(token,user,s,delegatedOperation=null){
  // A creator may supply an approved replacement after the first draft. Import that
  // exact manuscript once at rewrite; the ordinary proofreader and reviewer still run.
  let approvedReplacement=null;
- const draft=s.steps.find(item=>item.step_key==="writing_draft" && item.status==="passed");
- if(chosen.key==="writing_rewrite" && s.run.workflow==="idea_to_publish_audio" && src?.content?.trim() && Date.parse(src.created_at)>Date.parse(draft?.finished_at||"")){
+ const prerequisiteKey=chosen.key==="writing_proofread"?"writing_rewrite":"writing_draft";
+ const prerequisite=s.steps.find(item=>item.step_key===prerequisiteKey && item.status==="passed");
+ if(["writing_rewrite","writing_proofread"].includes(chosen.key) && s.run.workflow==="idea_to_publish_audio" && src?.content?.trim() && Date.parse(src.created_at)>Date.parse(prerequisite?.finished_at||"")){
    const [decisions,imports]=await Promise.all([
      rest(token,"approvals",{project_id:"eq."+s.run.project_id,source_version_id:"eq."+src.id,select:"decision",order:"created_at.desc,id.desc",limit:"1"}),
-     rest(token,"production_step_attempts",{run_id:"eq."+s.run.id,step_key:"eq.writing_rewrite","evidence->>imported_source_version_id":"eq."+src.id,select:"id",limit:"1"})
+     rest(token,"production_step_attempts",{run_id:"eq."+s.run.id,"evidence->>imported_source_version_id":"eq."+src.id,select:"id",limit:"1"})
    ]);
    if(decisions[0]?.decision==="approved" && !imports.length)approvedReplacement=src;
+ }
+ if(approvedReplacement && chosen.key==="writing_proofread"){
+   // The replacement arrived after the last rewrite. Proofread its actual text.
+   const input={...s,steps:s.steps.map(item=>item.step_key==="writing_rewrite"?{...item,output_text:src.content}:item)};
+   prompt=takePrompt(input,chosen,rulebook,original,projectRules);
  }
  await mutate("cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
    let result;
-   if(approvedReplacement){
+   if(approvedReplacement && chosen.key==="writing_rewrite"){
      result={text:approvedReplacement.content,provider:"project-source",model:null};
    }else if(chosen.agent==="audio_reviewer"){
      result=await reviewSoundtrack(token,s,chosen,rulebook,projectRules);
@@ -277,10 +283,13 @@ async function executeOne(token,user,s,delegatedOperation=null){
    await mutate("cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
     p_text:result.text||null,p_asset:result.asset_id||null,
-    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),...(approvedReplacement?{imported_source_version_id:approvedReplacement.id,check:"approved_replacement_imported"}:{check:"provider_returned_and_recorded"})}
+    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),...(approvedReplacement?{imported_source_version_id:approvedReplacement.id,check:chosen.key==="writing_proofread"?"approved_replacement_proofread":"approved_replacement_imported"}:{check:"provider_returned_and_recorded"})}
    });
    const hasRewriteStage=s.steps.some(step=>step.step_key==="writing_rewrite");
    if(reviewFailed && chosen.key==="writing_review" && hasRewriteStage && /^VERDICT:\s*REPAIR/i.test(result.text)){
+      if(s.run.source_version_id && (s.steps.some(item=>item.evidence?.imported_source_version_id===s.run.source_version_id) || s.attempts.some(item=>item.evidence?.imported_source_version_id===s.run.source_version_id))){
+        return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"Review identified repairs on an approved source replacement. Inspect the findings before revising that version."};
+      }
       const current=s.steps.find(step=>step.step_key==="writing_proofread")?.output_text?.trim();
       const previous=s.attempts.find(step=>step.step_key==="writing_proofread" && step.status==="passed")?.output_text?.trim();
       // A rewritten manuscript can retain the very same fault despite other edits.
