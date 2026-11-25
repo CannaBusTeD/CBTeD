@@ -177,11 +177,13 @@ async function jointLyricChoice(s, rounds, rulebook, projectRules){
      writer:{...writer.vote,response_id:writer.response_id},reviewer:{...reviewer.vote,response_id:reviewer.response_id}}};
 }
 
-async function runText(prompt,imageDataUrl=null,isReview=false,revision=false,ballotIds=null){
+async function runText(prompt,imageDataUrl=null,isReview=false,revision=false,ballotIds=null,songSections=null){
 
  const secret=Deno.env.get("OPENAI_API_KEY"),model=revision?(Deno.env.get("CBTED_EDITORIAL_REPAIR_MODEL")||"gpt-5.4-mini"):Deno.env.get("CBTED_TEXT_MODEL");
  if(!secret||!model)throw Error("Text provider is not configured");
- const schema=ballotIds ? {type:"object",additionalProperties:false,properties:{ranking:{type:"array",items:{type:"string",enum:ballotIds}},reason:{type:"string"}},required:["ranking","reason"]} : isReview
+ const schema=songSections ? {type:"object",additionalProperties:false,properties:{
+   style:{type:"string"},cues:{type:"array",items:{type:"object",additionalProperties:false,properties:{section:{type:"integer"},direction:{type:"string"}},required:["section","direction"]}}
+ },required:["style","cues"]} : ballotIds ? {type:"object",additionalProperties:false,properties:{ranking:{type:"array",items:{type:"string",enum:ballotIds}},reason:{type:"string"}},required:["ranking","reason"]} : isReview
   ? {type:"object",additionalProperties:false,properties:{verdict:{type:"string",enum:["PASS","REPAIR","BLOCKED"]},findings:{type:"string"}},required:["verdict","findings"]}
   : {type:"object",additionalProperties:false,properties:{status:{type:"string",enum:["complete","blocked"]},artifact:{type:"string"},reason:{type:"string"}},required:["status","artifact","reason"]};
  const result=await requestJSON("https://api.openai.com/v1/responses",
@@ -191,6 +193,18 @@ async function runText(prompt,imageDataUrl=null,isReview=false,revision=false,ba
  const text=result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||"";
  if(!text.trim())throw Error("Text provider returned no content");
  const stage=JSON.parse(text);
+ if(songSections){
+   const sections=[...songSections],used=new Set();
+   if(!stage.style?.trim() || stage.style.trim().length>1000 || !stage.cues?.length)throw Error("Music direction requires a separate style field and arrangement cues");
+   for(const cue of stage.cues){
+     if(!Number.isInteger(cue.section)||cue.section<0||cue.section>=sections.length||used.has(cue.section)||!cue.direction?.trim()||/[\[\]\r\n]/.test(cue.direction))throw Error("Invalid music cue or section");
+     sections[cue.section]="["+cue.direction.trim()+"]\n"+sections[cue.section];
+     used.add(cue.section);
+   }
+   const lyrics=sections.join("\n\n");
+   if(lyrics.length>5000)throw Error("Arranged lyrics exceed the Suno lyrics limit");
+   return {text:"SUNO LYRICS\n"+lyrics+"\n\nSUNO STYLE\n"+stage.style.trim(),provider:"openai-responses",model,response_id:result.id};
+ }
  if(ballotIds){
    if(!stage.reason?.trim()||!Array.isArray(stage.ranking)||new Set(stage.ranking).size!==stage.ranking.length||stage.ranking.some(id=>!ballotIds.includes(id)))throw Error("Invalid editorial ballot");
    return {vote:stage,model,response_id:result.id};
@@ -333,6 +347,12 @@ async function executeOne(token,user,s,delegatedOperation=null){
      result=await jointLyricChoice(s,prior,rulebook,projectRules);
    }else if(approvedReplacement && chosen.key==="writing_rewrite"){
      result={text:approvedReplacement.content,provider:"project-source",model:null};
+   }else if(chosen.key==="audio_direction" && ["idea_to_publish_audio","song_video","song_video_publish"].includes(s.run.workflow)){
+     const decision=s.steps.find(item=>item.step_key==="writing_review" && item.status==="passed");
+     const manuscript=decision?.evidence?.selected_manuscript || s.steps.find(item=>item.step_key==="writing_proofread" && item.status==="passed")?.output_text;
+     if(!manuscript?.trim())throw Error("The reviewed song is missing");
+     const sections=manuscript.trim().split(/\n\s*\n/);
+     result=await runText(prompt+"\nWrite a concrete separate Suno style and musical cues for the numbered sections. Use zero-based section numbers. Return only the cues and style; the server inserts cues into the exact lyric.\n"+JSON.stringify(sections),null,false,false,null,sections);
    }else if(chosen.agent==="audio_reviewer"){
      result=await reviewSoundtrack(token,s,chosen,rulebook,projectRules);
    }else result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
