@@ -83,14 +83,15 @@ async function fullRulebook(studio){
 }
 function takePrompt(s,step,rulebook,original,projectRules){
  const completed=s.steps.filter(x=>x.status==="passed");
- const inputs=completed.map(x=>({stage:x.step_key,artifact:x.output_text||null,asset_id:x.asset_id||null}));
+ const selected=completed.find(item=>item.step_key==="writing_review")?.evidence?.selected_manuscript;
+ const inputs=completed.map(x=>({stage:x.step_key,artifact:selected && x.step_key==="writing_proofread"?selected:x.output_text||null,asset_id:x.asset_id||null}));
  const latest=(keys)=>[...completed].reverse().find(x=>keys.includes(x.step_key)&&x.output_text)?.output_text;
- const manuscript=latest(["writing_proofread","writing_rewrite","writing_draft"]);
+ const manuscript=selected || latest(["writing_proofread","writing_rewrite","writing_draft"]);
  const draftStart=completed.find(x=>x.step_key==="writing_draft")?.started_at;
  const currentAttempts=(s.attempts||[]).filter(x=>!draftStart || Date.parse(x.recorded_at)>=Date.parse(draftStart));
  const reviewedVersion=currentAttempts.find(x=>x.step_key==="writing_proofread"&&x.status==="passed"&&x.output_text);
  const revisionSource=step.key==="writing_rewrite" && reviewedVersion ? reviewedVersion.output_text : null;
- const source=original || s.run.instructions;
+ const source=selected || original || s.run.instructions;
  const history=currentAttempts.filter(x=>x.step_key==="writing_review" && /^VERDICT:\s*REPAIR/i.test(x.output_text||"")).slice(0,1);
  const handoff=JSON.stringify({dependencies:step.depends_on,writing_state:{operation:s.run.workflow,source_version_id:s.run.source_version_id||null,stage:step.key,commissioned_original:!s.run.source_version_id&&["writing","song_video","song_video_publish","idea_to_publish","idea_to_publish_audio"].includes(s.run.workflow),current_draft_available:Boolean(manuscript)},planned_image_count:s.steps.filter(x=>x.agent==='image_generator').length,planned_clip_count:s.steps.filter(x=>x.agent==='video_generator').length,completed:["writing_reviewer","writing_proofreader"].includes(step.agent)?[]:step.key==="writing_rewrite"?inputs.filter(x=>["writing_critique","writing_edit","writing_language_audit"].includes(x.stage)):inputs,current_manuscript:revisionSource || manuscript,manuscript_under_revision:revisionSource,recorded_approvals:latestDecisions(s.approvals),review_feedback:step.agent==="writing_synthesizer"?history.map(x=>x.output_text):[]});
  const task=modelInstruction(step,rulebook,projectRules,source,handoff,s.run.instructions);
@@ -100,7 +101,7 @@ function takePrompt(s,step,rulebook,original,projectRules){
  const attachment=step.studio==="writing" && editingText ? "\n\nBEGIN EXACT MANUSCRIPT\n"+editingText+"\nEND EXACT MANUSCRIPT" : "";
  const songWorkflow=["idea_to_publish_audio","song_video","song_video_publish"].includes(s.run.workflow);
  const songDirection=songWorkflow && step.key==="writing_draft" ? "\nFor a commissioned original at writing_draft, the saved idea is the source and this stage creates the first unreviewed lyric sheet. No existing manuscript or lyric-editing mode selection is required. Write the complete first draft requested by the brief. A quoted hook can recur across developed verses and refrains. A short target duration is flexible when the brief permits it. Keep arrangement packaging for audio_direction." : "";
- const sunoPackage=songWorkflow && step.key==="audio_direction" ? "\nPreserve the reviewed lyric verbatim. Return separate Suno lyrics and style fields. The lyrics field must fit 5000 characters including bracketed arrangement and performance cues throughout. Match the explicit genre, voices and project palette. Include only supported optional settings." : "";
+ const sunoPackage=songWorkflow && step.key==="audio_direction" ? "\nPreserve the reviewed lyric verbatim. Return separate Suno lyrics and style fields. The lyrics field must fit 5000 characters including bracketed arrangement and performance cues throughout. A provider job, funded quote, generated recording, listening approval and visual timings come later. The reviewed manuscript is the prerequisite for this text-only stage. Match the explicit genre, voices and project palette. Include only supported optional settings." : "";
  const deliverable={
    writing_critic:"Return line-specific critique of the supplied manuscript. Quote the lyric and explain the issue. Your entire deliverable is the critique.",
    writing_editor:"Return focused editorial recommendations for the current manuscript.",
@@ -109,6 +110,12 @@ function takePrompt(s,step,rulebook,original,projectRules){
    writing_proofreader:"Return the complete proofread manuscript.",
    writing_synthesizer:"Return the complete revised manuscript."
  }[step.agent]||"";
+ if(songWorkflow && ["audio_direction","audio_select_tool"].includes(step.key)){
+   if(!manuscript)throw Error("A reviewed manuscript is required for music direction");
+   const audioInputs=inputs.filter(row=>row.stage==="writing_review" || row.stage==="audio_direction");
+   return modelInstruction(step,rulebook,projectRules,manuscript,JSON.stringify(audioInputs),s.run.instructions)+sunoPackage+
+     "\nPrepare the requested text deliverable now. Audio selection names the provider and one planned operation. Credit approval applies to submission later. Do not claim a recording, inspection, spend or runtime verification.";
+ }
  return task+editorialAuthority+songDirection+sunoPackage+"\n"+deliverable+"\nThe backend has already retrieved the project and stage state above. For a new work the saved brief authorizes an original draft. Treat generated manuscripts as working versions. Use the exact manuscript above for editorial tasks. Complete only your assigned stage. Return status complete with the actual deliverable, or blocked with the missing prerequisite in reason. Never mark a request for input complete."+attachment;
 
 }
@@ -127,11 +134,54 @@ async function loadActualImage(token,project,previousStep){
  const asset=assets[0];if(!asset)throw Error("Actual stored image not found");
  return privateImageData(token,asset);
 }
-async function runText(prompt,imageDataUrl=null,isReview=false,revision=false){
+// The review and corresponding proof are archived together by the retry transaction.
+async function priorLyricReviews(token, runId){
+ const reviews=await rest(token,"production_step_attempts",{
+   run_id:"eq."+runId,step_key:"eq.writing_review",output_text:"ilike.VERDICT: REPAIR*",order:"attempt_number.desc",limit:"3"
+ });
+ if(!reviews.length)return [];
+ const proofs=await rest(token,"production_step_attempts",{
+   run_id:"eq."+runId,step_key:"eq.writing_proofread",status:"eq.passed",
+   recorded_at:"in.("+reviews.map(item=>item.recorded_at).join(",")+")"
+ });
+ return reviews.map(review=>({round:review.attempt_number,findings:review.output_text,
+   manuscript:proofs.find(proof=>proof.recorded_at===review.recorded_at)?.output_text||null}));
+}
+
+function draftCandidates(rounds){
+ const distinct=new Map();
+ for(const row of rounds){
+   if(row.manuscript?.trim() && !distinct.has(row.manuscript))distinct.set(row.manuscript,row);
+ }
+ return [...distinct.values()];
+}
+
+async function jointLyricChoice(s, rounds, rulebook, projectRules){
+ const drafts=draftCandidates(rounds);
+ if(!drafts.length)throw Error("The reviewed lyrics are unavailable for joint selection");
+ const ids=drafts.map(row=>String(row.round));
+ const common="Choose among these existing reviewed manuscripts for the requested song. Rank acceptable drafts best first. Exclude only drafts that violate a binding creator requirement. Include an empty ranking if none can be used. Weigh sung cadence, chorus movement, and the unresolved findings. Do not ask for another rewrite.\n"+JSON.stringify({brief:s.run.instructions,projectRules,rulebook,drafts});
+ const writer=await runText("As the lyric writer: "+common,null,false,true,ids);
+ const reviewer=await runText("As the independent reviewer deciding the strongest draft together with the writer: "+common+"\nWriter ballot: "+JSON.stringify(writer.vote),null,false,true,ids);
+ const eligible=reviewer.vote.ranking.filter(id=>writer.vote.ranking.includes(id));
+ if(!eligible.length)throw Error("Writer and reviewer identified no mutually eligible manuscript: "+reviewer.vote.reason.slice(0,160));
+ // Combine both rankings. An equal total goes to the writer's first preference.
+ eligible.sort((a,b)=>{
+   const difference=writer.vote.ranking.indexOf(a)+reviewer.vote.ranking.indexOf(a)-writer.vote.ranking.indexOf(b)-reviewer.vote.ranking.indexOf(b);
+   return difference||writer.vote.ranking.indexOf(a)-writer.vote.ranking.indexOf(b);
+ });
+ const selected=drafts.find(row=>String(row.round)===eligible[0]);
+ return {text:"JOINT SELECTION: reviewed draft "+selected.round+"\nWriter: "+writer.vote.reason+"\nReviewer: "+reviewer.vote.reason,
+   provider:"openai-responses",model:reviewer.model,selection:{check:"writer_reviewer_selection",selected_review_round:selected.round,
+     selected_manuscript:selected.manuscript,review_rounds:rounds.map(row=>({round:row.round,findings:row.findings})),
+     writer:{...writer.vote,response_id:writer.response_id},reviewer:{...reviewer.vote,response_id:reviewer.response_id}}};
+}
+
+async function runText(prompt,imageDataUrl=null,isReview=false,revision=false,ballotIds=null){
 
  const secret=Deno.env.get("OPENAI_API_KEY"),model=revision?(Deno.env.get("CBTED_EDITORIAL_REPAIR_MODEL")||"gpt-5.4-mini"):Deno.env.get("CBTED_TEXT_MODEL");
  if(!secret||!model)throw Error("Text provider is not configured");
- const schema=isReview
+ const schema=ballotIds ? {type:"object",additionalProperties:false,properties:{ranking:{type:"array",items:{type:"string",enum:ballotIds}},reason:{type:"string"}},required:["ranking","reason"]} : isReview
   ? {type:"object",additionalProperties:false,properties:{verdict:{type:"string",enum:["PASS","REPAIR","BLOCKED"]},findings:{type:"string"}},required:["verdict","findings"]}
   : {type:"object",additionalProperties:false,properties:{status:{type:"string",enum:["complete","blocked"]},artifact:{type:"string"},reason:{type:"string"}},required:["status","artifact","reason"]};
  const result=await requestJSON("https://api.openai.com/v1/responses",
@@ -141,6 +191,10 @@ async function runText(prompt,imageDataUrl=null,isReview=false,revision=false){
  const text=result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||"";
  if(!text.trim())throw Error("Text provider returned no content");
  const stage=JSON.parse(text);
+ if(ballotIds){
+   if(!stage.reason?.trim()||!Array.isArray(stage.ranking)||new Set(stage.ranking).size!==stage.ranking.length||stage.ranking.some(id=>!ballotIds.includes(id)))throw Error("Invalid editorial ballot");
+   return {vote:stage,model,response_id:result.id};
+ }
  if(isReview){
   if(!stage.findings?.trim()||!["PASS","REPAIR"].includes(stage.verdict))throw Error("Review lacks required input: "+String(stage.findings||"").slice(0,230));
   return {text:"VERDICT: "+stage.verdict+"\n"+stage.findings,provider:"openai-responses",model,response_id:result.id};
@@ -273,38 +327,44 @@ async function executeOne(token,user,s,delegatedOperation=null){
  await mutate("cbted_claim_production_step",{p_run:s.run.id,p_step:chosen.key});
  try{
    let result;
-   if(approvedReplacement && chosen.key==="writing_rewrite"){
+   const songReview=chosen.key==="writing_review" && s.steps.some(item=>item.step_key==="writing_proofread");
+   const prior=songReview?await priorLyricReviews(token,s.run.id):[];
+   if(prior.length>=3){
+     result=await jointLyricChoice(s,prior,rulebook,projectRules);
+   }else if(approvedReplacement && chosen.key==="writing_rewrite"){
      result={text:approvedReplacement.content,provider:"project-source",model:null};
    }else if(chosen.agent==="audio_reviewer"){
      result=await reviewSoundtrack(token,s,chosen,rulebook,projectRules);
    }else result=chosen.kind==="text"?await runText(prompt,imageData,isReview,["writing_synthesizer","writing_reviewer","writing_proofreader"].includes(chosen.agent) && s.attempts.some(x=>x.step_key==="writing_review" && x.output_text?.startsWith("VERDICT: REPAIR"))):await runImage(
     other.find(x=>x.step_key==="visual_prompt_"+chosen.key.split("_").pop())?.output_text||prompt,user,s.run.project_id,token,rules);
-   const reviewFailed=isReview&&!reviewPassed(result.text);
+   if(songReview && !result.selection && /^VERDICT:\s*REPAIR/i.test(result.text)){
+     const proof=s.steps.find(item=>item.step_key==="writing_proofread" && item.status==="passed");
+     const current={round:actual.attempt_number+1,manuscript:proof?.output_text,findings:result.text};
+     const protectedSource=s.run.source_version_id && (s.steps.some(item=>item.evidence?.imported_source_version_id===s.run.source_version_id) || s.attempts.some(item=>item.evidence?.imported_source_version_id===s.run.source_version_id));
+      const normalize=text=>String(text||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim();
+      const quotedLines=text=>Array.from(String(text||"").matchAll(/["“]([^"”\n]{15,240})["”]/g),m=>normalize(m[1])).filter(line=>line.split(" ").length>=5);
+      const priorQuotes=new Set(quotedLines(prior[0]?.findings));
+      const retainedFault=quotedLines(result.text).some(line=>priorQuotes.has(line) && normalize(current.manuscript).includes(line) && !normalize(s.run.instructions).includes(line));
+     if(prior.length>=2 || protectedSource || retainedFault || prior.some(row=>row.manuscript===current.manuscript)){
+       const findingsId=result.response_id;
+       try{
+         result=await jointLyricChoice(s,[current,...prior],rulebook,projectRules);
+         result.selection.last_review_response_id=findingsId;
+       }catch(error){
+         await mutate("cbted_finish_production_step",{p_run:s.run.id,p_step:chosen.key,p_result:"failed",p_text:current.findings,
+           p_evidence:{provider:result.provider,model:result.model,response_id:findingsId,selection_error:String(error.message||error).slice(0,300)}});
+         return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"Joint draft selection requires attention: "+String(error.message||error).slice(0,200)};
+       }
+     }
+   }
+   const reviewFailed=isReview&&!result.selection&&!reviewPassed(result.text);
    await mutate("cbted_finish_production_step",{
     p_run:s.run.id,p_step:chosen.key,p_result:reviewFailed?"failed":"passed",
     p_text:result.text||null,p_asset:result.asset_id||null,
-    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),...(approvedReplacement?{imported_source_version_id:approvedReplacement.id,check:chosen.key==="writing_proofread"?"approved_replacement_proofread":"approved_replacement_imported"}:{check:"provider_returned_and_recorded"})}
+    p_evidence:{provider:result.provider,model:result.model,response_id:result.response_id||null,...(result.reviewed_asset_id?{reviewed_asset_id:result.reviewed_asset_id}:{}),...(approvedReplacement?{imported_source_version_id:approvedReplacement.id,check:chosen.key==="writing_proofread"?"approved_replacement_proofread":"approved_replacement_imported"}:{check:"provider_returned_and_recorded"}),...result.selection}
    });
    const hasRewriteStage=s.steps.some(step=>step.step_key==="writing_rewrite");
    if(reviewFailed && chosen.key==="writing_review" && hasRewriteStage && /^VERDICT:\s*REPAIR/i.test(result.text)){
-      if(s.run.source_version_id && (s.steps.some(item=>item.evidence?.imported_source_version_id===s.run.source_version_id) || s.attempts.some(item=>item.evidence?.imported_source_version_id===s.run.source_version_id))){
-        return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"Review identified repairs on an approved source replacement. Inspect the findings before revising that version."};
-      }
-      const current=s.steps.find(step=>step.step_key==="writing_proofread")?.output_text?.trim();
-      const previous=s.attempts.find(step=>step.step_key==="writing_proofread" && step.status==="passed")?.output_text?.trim();
-      // A rewritten manuscript can retain the very same fault despite other edits.
-      const draftStart=s.steps.find(step=>step.step_key==="writing_draft")?.started_at;
-      const lastReview=s.attempts.find(step=>step.step_key==="writing_review" && step.status==="failed" && (!draftStart||Date.parse(step.recorded_at)>=Date.parse(draftStart)));
-      const normalize=text=>String(text||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim();
-      const quotedLines=text=>Array.from(String(text||"").matchAll(/["“]([^"”\n]{15,240})["”]/g),m=>normalize(m[1])).filter(line=>line.split(" ").length>=5);
-      const priorQuotes=new Set(quotedLines(lastReview?.output_text));
-      const retainedFault=quotedLines(result.text).some(line=>priorQuotes.has(line) && normalize(current).includes(line) && !normalize(s.run.instructions).includes(line));
-      if(retainedFault){
-        return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"Two reviews flagged the same surviving lyric passage. Inspect the cited passage before spending on another revision."};
-      }
-      if(current && current===previous){
-        return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:false,reason:"The revision returned the same manuscript. Inspect the repair feedback before retrying."};
-      }
       try{
         await mutate("cbted_retry_production_step",{p_run:s.run.id,p_step:chosen.key});
         return {executed:true,step:chosen.key,kind:chosen.kind,review_failed:true,revision_cycle_reopened:true};
