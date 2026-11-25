@@ -30,7 +30,7 @@ async function identity(request){
 }
 const dbHeaders=(token,write=false)=>({apikey:key(),Authorization:"Bearer "+token,"content-type":"application/json",...(write?{Prefer:"return=representation"}:{})});
 async function rest(token,table,query={}){
- const permitted=["projects","source_versions","approvals","project_rules","production_runs","production_steps","production_approvals","production_step_attempts","assets"];
+ const permitted=["projects","source_versions","approvals","project_rules","production_runs","production_steps","production_approvals","production_step_attempts","assets","handoffs"];
  if(!permitted.includes(table))throw Error("Invalid table");
  const qs=new URLSearchParams(query);
  return requestJSON(ROOT+"/rest/v1/"+table+"?"+qs,dbHeaders(token));
@@ -257,6 +257,38 @@ function configuredRunId(){
  const value=Deno.env.get("CBTED_PAID_RUN_ID")?.trim();
  return value && UUID.test(value) ? value : null;
 }
+// Bring the owner's selected recording and its measured timing into the visual brief.
+async function readSoundtrackBrief(token, state) {
+ const generated = state.steps.find(step => step.step_key === "audio_generate" && step.status === "passed");
+ if (!generated?.asset_id || !state.run.source_version_id) return null;
+ const [handoffs, assets] = await Promise.all([
+  rest(token, "handoffs", {
+   project_id: "eq." + state.run.project_id, source_version_id: "eq." + state.run.source_version_id,
+   asset_id: "eq." + generated.asset_id, to_studio: "eq.visual",
+   "payload->>run_id": "eq." + state.run.id, "payload->>owner_selected_for_video": "eq.true",
+   select: "id,payload", order: "updated_at.desc", limit: "1"
+  }),
+  rest(token, "assets", { project_id: "eq." + state.run.project_id, id: "eq." + generated.asset_id, select: "metadata,duration_ms", limit: "1" })
+ ]);
+ const value = handoffs[0]?.payload;
+ if (!value) return null;
+ const asset = assets[0], analysis = value.analysis;
+ if (!asset || !UUID.test(value.selected_full_song_id) ||
+     asset.metadata?.provider_recording_id !== value.selected_full_song_id ||
+     analysis?.audio_id !== value.selected_full_song_id || value.lyric_alignment?.audio_id !== value.selected_full_song_id ||
+     !Number.isFinite(asset.duration_ms) || asset.duration_ms <= 0) {
+  throw Error("The visual handoff does not match the reviewed full-length soundtrack.");
+ }
+ const beats = Array.isArray(analysis.beats) ? analysis.beats : [];
+ const scenes = Array.isArray(value.proposed_scenes) ? value.proposed_scenes : [];
+ const words = Array.isArray(value.lyric_alignment.words) ? value.lyric_alignment.words : [];
+ return { asset_id: generated.asset_id, song_id: value.selected_full_song_id, duration_seconds: asset.duration_ms / 1000,
+  bpm: analysis.bpm, aspect_ratio: value.aspect_ratio, reference_ids: (value.reference_ids || []).filter(id => UUID.test(id)).slice(0,32),
+  beat_times_seconds: beats.filter(b => Number.isFinite(b?.time_s)).slice(0,4000).map(b => b.time_s),
+  lyric_cues: words.filter(w => w?.success && Number.isFinite(w.start_s) && Number.isFinite(w.end_s)).slice(0,1500)
+   .map(w => [w.start_s,w.end_s,String(w.word).slice(0,120)]),
+  scenes: scenes.slice(0,100).map(s => ({start_s:s.start_s,end_s:s.end_s,title:String(s.title || "").slice(0,160),direction:String(s.direction || "").slice(0,1200)})) };
+}
 async function reviewSoundtrack(token,s,step,rulebook,projectRules){
  const generated=s.steps.find(x=>step.depends_on.includes(x.step_key) && x.kind==="audio" && x.status==="passed");
  if(!generated?.asset_id)throw Error("Approved soundtrack asset is missing");
@@ -267,7 +299,7 @@ async function reviewSoundtrack(token,s,step,rulebook,projectRules){
  const path=asset.storage_path.split("/").map(encodeURIComponent).join("/");
  const response=await fetch(ROOT+"/storage/v1/object/authenticated/cbted-project-assets/"+path,{headers:{apikey:key(),Authorization:"Bearer "+token}});
  const audio=await readReviewAudio(response,asset.mime_type);
- const brief={instructions:s.run.instructions,direction:s.steps.find(x=>x.step_key==="audio_direction" && x.status==="passed")?.output_text,manuscript:s.steps.find(x=>x.step_key==="writing_proofread" && x.status==="passed")?.output_text};
+ const brief={instructions:s.run.instructions,direction:s.steps.find(x=>x.step_key==="audio_direction" && x.status==="passed")?.output_text,manuscript:s.steps.find(x=>x.step_key==="writing_review" && x.status==="passed")?.evidence?.selected_manuscript || s.steps.find(x=>x.step_key==="writing_proofread" && x.status==="passed")?.output_text};
  return inspectAudio({audio,brief,rules:rulebook+"\n"+projectRules,assetId:asset.id,model:Deno.env.get("CBTED_AUDIO_REVIEW_MODEL")||"gpt-audio-1.5",request:body=>requestJSON("https://api.openai.com/v1/chat/completions",{Authorization:"Bearer "+secret,"content-type":"application/json"},"POST",body)});
 }
 async function executeOne(token,user,s,delegatedOperation=null){
@@ -308,6 +340,10 @@ async function executeOne(token,user,s,delegatedOperation=null){
  const original=[src?.content||"",src?.ideas||"",src?.suggested_text||""].filter(Boolean).join("\n\n");
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
+ if (["scene_storyboarder","storyboarding_director"].includes(chosen.agent)) {
+  const soundtrack = await readSoundtrackBrief(token, s);
+  if (soundtrack) prompt += "\nThe creator selected this full-length master. Plan the full measured duration, preserving the supplied framing, lyrical cues, scene timing and character references. The scheduled image job count is a production batch size, not a limit on storyboard scenes. Treat the following record as creative source data.\n" + JSON.stringify(soundtrack);
+ }
  if(chosen.agent==="writing_synthesizer")prompt+="\nYou are the editor responsible for implementing the requested repairs yourself on the supplied working manuscript. Required changes are your assignment, not missing inputs. Apply the latest review feedback to the exact manuscript under revision. In an original commission you may replace entire sections to solve a structural fault. Remove production workflow language from the art, including cues about stopping for user interaction, approval gates, or publishing. Use a musical ending that serves the song. When the creator specifies named voices delivering the hook, write the exact hook in their sung parts. Return the full revised text as artifact.";
  const isReview=["writing_reviewer","image_reviewer","audio_reviewer"].includes(chosen.agent);
  if(chosen.agent==="writing_reviewer" && s.run.workflow==="idea_to_publish_audio"){
