@@ -208,12 +208,15 @@ async function submitted(user,body){
  await audit(user,job.id,"submitted",{provider_job_id:task});
  return {status:"submitted",job_id:job.id};
 }
-function permittedMediaUrl(value,provider){
+function permittedMediaUrl(value,provider,kind){
  let u;try{u=new URL(value)}catch{throw Error("Invalid media result URL")}
  if(u.protocol!=="https:"||u.port||u.username||u.password)throw Error("HTTPS media URL required");
  const hosts=String(Deno.env.get("CBTED_MEDIA_ALLOWED_HOSTS")||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);
  const hostname=u.hostname.toLowerCase();
- if(!hosts.length || !hosts.some(h=>hostname===h||hostname.endsWith("."+h)))throw Error("That provider media host has not yet been authorised for import");
+ const sunoAudioExport=provider==="suno" && kind==="audio" &&
+  hostname==="suno-data-uploads.s3.amazonaws.com" && u.pathname.startsWith("/studio/uploads/");
+ const configuredHost=hosts.some(h=>hostname===h||hostname.endsWith("."+h));
+ if(!sunoAudioExport && !configuredHost)throw Error("That provider media host has not yet been authorised for import");
  if(u.pathname.length>1500)throw Error("Media URL path too long");
  return u.toString();
 }
@@ -240,7 +243,7 @@ async function importResult(user,body){
  const job=await ownedJob(user,body.job_id);
  if(job.result_asset_id)return importedReceipt(job);
  if(job.status!=="submitted")throw Error("Verify a submitted provider task before importing media");
- const url=permittedMediaUrl(body.result_url,job.provider);
+ const url=permittedMediaUrl(body.result_url,job.provider,job.kind);
  const timeout=AbortSignal.timeout(30000);
  const remote=await fetch(url,{redirect:"error",signal:timeout});
  if(!remote.ok)throw Error("Provider media could not be downloaded");
