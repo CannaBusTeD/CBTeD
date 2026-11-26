@@ -9,7 +9,7 @@ function key(){
  if(plain)return plain;
  try{const keys=JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")||"{}");return Deno.env.get(keys.default)||keys.default||"";}catch{return "";}
 }
-const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type","access-control-allow-methods":"POST,GET,OPTIONS"}});
+const json=(data,status=200)=>new Response(status===204?null:JSON.stringify(data),{status,headers:{"content-type":"application/json","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type,x-client-info","access-control-allow-methods":"POST,GET,OPTIONS"}});
 const requiredUUID=(value,label)=>{if(typeof value!=="string"||!UUID.test(value))throw Error("Invalid "+label);return value;};
 async function requestJSON(url,headers={},method="GET",body=undefined){
  const resp=await fetch(url,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
@@ -60,6 +60,35 @@ async function state(token,runId){
    rest(token,"production_step_attempts",{run_id:"eq."+runId,order:"recorded_at.desc",limit:"50"})
  ]);
  return {run,steps,approvals,attempts};
+}
+async function privateEditHandoff(token,s){
+ const assembly=s.steps.find(step=>step.step_key==="animation_assembly");
+ if(!assembly)return null;
+ const [row]=await rest(token,"project_rules",{project_id:"eq."+s.run.project_id,
+  scope:"eq.animation",rule_key:"eq.private_edit_handoff",order:"revision_number.desc",limit:"1",select:"body"});
+ if(!row)return null;
+ let route;
+ try{route=JSON.parse(row.body);}catch{return null;}
+ if(route?.editor!=="capcut"||route.stage!==assembly.step_key||route.run_id!==s.run.id||
+    route.delivery!=="private_pre_publish"||!UUID.test(route.notes_source_id))return null;
+ const [notes]=await rest(token,"source_versions",{project_id:"eq."+s.run.project_id,source_id:"eq."+route.notes_source_id,
+  order:"version_number.desc",limit:"1",select:"id,version_number,content,ideas,suggested_text,change_note"});
+ const reviewed=[];
+ const waiting=[];
+ for(const step of s.steps){
+  if(!["image_generator","video_generator","audio_generator"].includes(step.agent))continue;
+  const review=s.steps.find(candidate=>candidate.agent===step.kind+"_reviewer"&&candidate.depends_on.includes(step.step_key));
+  if(step.status==="passed"&&step.asset_id&&review?.status==="passed"){
+   reviewed.push({step_key:step.step_key,kind:step.kind,asset_id:step.asset_id,review_step:review.step_key});
+  }else{waiting.push(step.step_key);}
+ }
+ const states=Object.fromEntries(s.steps.map(step=>[step.step_key,step.status]));
+ const decision=authorisation({plan:planFromState(s),step_key:assembly.step_key,states,approvals:latestDecisions(s.approvals)});
+ const eligible=["active","prepared"].includes(s.run.status)&&decision.allowed&&!waiting.length&&reviewed.some(x=>x.kind==="video");
+ return {editor:"capcut",project_id:s.run.project_id,run_id:s.run.id,stage:assembly.step_key,stage_status:assembly.status,
+  eligible_to_request_claim:eligible,private_only:true,reviewed_assets:reviewed,waiting_for:waiting,
+  notes_source_id:route.notes_source_id,latest_edit_notes:notes??null,
+  editor_workflow:"Read the current edit notes and approved storyboard. Read reviewed private assets by ID with cbted_get_asset_link. Return creative proposals or the existing draft ID as a new version of the edit notes with cbted_save_writing_version. At assembly, obtain the normal production claim before starting the edit. Reuse the selected master and existing draft. Private export and independent release review precede publication decisions."};
 }
 function latestDecisions(approvals){
  const m={};for(const item of approvals)m[item.step_key]=item.decision;return m;
@@ -365,6 +394,11 @@ async function executeOne(token,user,s,delegatedOperation=null){
  }
  if(chosen.kind==="publish"||chosen.agent==="publish_verifier")
    return {executed:false,blocked:[{step:chosen.key,reason:"Publishing to platforms is not connected yet. Nothing was posted."}]};
+ if(chosen.key==="animation_assembly"){
+   const handoff=await privateEditHandoff(token,s);
+   if(handoff)return {executed:false,step:chosen.key,edit_handoff:handoff,
+    blocked:[{step:chosen.key,reason:handoff.eligible_to_request_claim?"The linked CapCut editor can claim the private assembly.":"Waiting for reviewed media or assembly authorization."}]};
+ }
  if(!["text","image"].includes(chosen.kind))return {executed:false,blocked:[{step:chosen.key,reason:"No configured backend adapter for "+chosen.kind+"; actual generation required"}]};
  if(["video_reviewer","release_auditor"].includes(chosen.agent))
    return {executed:false,blocked:[{step:chosen.key,reason:"Cannot honestly review actual audio/video without a media-inspection adapter"}]};
@@ -381,6 +415,10 @@ async function executeOne(token,user,s,delegatedOperation=null){
  const original=[src?.content||"",src?.ideas||"",src?.suggested_text||""].filter(Boolean).join("\n\n");
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
+ const sceneNumber=actual?.evidence?.storyboard_scene_number;
+ if(chosen.agent==="visual_prompt_writer" && Number.isInteger(sceneNumber)){
+   prompt+="\nUse only the approved storyboard moment #"+sceneNumber+". Start the standalone image prompt with storyboard moment #"+sceneNumber+" followed by its exact quoted title. Use this assignment even when the generation slot number differs.";
+ }
  let soundtrack=null;
  if (["scene_storyboarder","storyboarding_director","visual_analyst","visual_tool_selector","visual_prompt_writer","image_generator"].includes(chosen.agent)) {
   soundtrack = await readSoundtrackBrief(token, s);
@@ -477,6 +515,10 @@ async function executeOne(token,user,s,delegatedOperation=null){
    }
    if(chosen.agent==="visual_prompt_writer"){
      const productionPrompt=String(result.text||"").trim();
+     if(Number.isInteger(sceneNumber)){
+       const moments=[...productionPrompt.matchAll(/storyboard\\s+moment\\s+#(\\d+)\\b/gi)].map(match=>Number(match[1]));
+       if(!moments.length||moments.some(number=>number!==sceneNumber))throw Error("Visual prompt must select its assigned storyboard moment");
+     }
      if(productionPrompt===chosen.key || productionPrompt.length<200)
        throw Error("Visual prompt writer returned an incomplete placeholder instead of the standalone production prompt");
    }
@@ -560,7 +602,11 @@ Deno.serve(async(request)=>{
    });
    return json({run_id,created:true,executed:false,workflow:plan.workflow,steps:plan.steps.length});
   }
-  if(path==="status")return json(await state(user.token,body.run_id));
+  if(path==="status"||path==="edit-handoff"){
+   const current=await state(user.token,body.run_id);
+   const handoff=await privateEditHandoff(user.token,current);
+   return json(path==="edit-handoff"?{edit_handoff:handoff}:{...current,...(handoff?{edit_handoff:handoff}:{})});
+  }
   if(path==="approve"){
    await requireRun(user.token,body.run_id);
    const approval_id=await rpc(user.token,"cbted_decide_production_step",{p_run:body.run_id,p_step:body.step_key,p_decision:body.decision,p_note:body.note||null});
