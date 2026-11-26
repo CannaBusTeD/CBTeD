@@ -381,6 +381,10 @@ async function executeOne(token,user,s,delegatedOperation=null){
  const original=[src?.content||"",src?.ideas||"",src?.suggested_text||""].filter(Boolean).join("\n\n");
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
+ const sceneNumber=actual?.evidence?.storyboard_scene_number;
+ if(chosen.agent==="visual_prompt_writer" && Number.isInteger(sceneNumber)){
+   prompt+="\nUse only the approved storyboard moment #"+sceneNumber+". Start the standalone image prompt with storyboard moment #"+sceneNumber+" followed by its exact quoted title. Use this assignment even when the generation slot number differs.";
+ }
  let soundtrack=null;
  if (["scene_storyboarder","storyboarding_director","visual_analyst","visual_tool_selector","visual_prompt_writer","image_generator"].includes(chosen.agent)) {
   soundtrack = await readSoundtrackBrief(token, s);
@@ -477,6 +481,10 @@ async function executeOne(token,user,s,delegatedOperation=null){
    }
    if(chosen.agent==="visual_prompt_writer"){
      const productionPrompt=String(result.text||"").trim();
+     if(Number.isInteger(sceneNumber)){
+       const moments=[...productionPrompt.matchAll(/storyboard\\s+moment\\s+#(\\d+)\\b/gi)].map(match=>Number(match[1]));
+       if(!moments.length||moments.some(number=>number!==sceneNumber))throw Error("Visual prompt must select its assigned storyboard moment");
+     }
      if(productionPrompt===chosen.key || productionPrompt.length<200)
        throw Error("Visual prompt writer returned an incomplete placeholder instead of the standalone production prompt");
    }
