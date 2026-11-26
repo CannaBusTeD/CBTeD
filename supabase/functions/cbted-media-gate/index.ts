@@ -10,7 +10,7 @@ const PUB=(()=>{const v=Deno.env.get("SUPABASE_PUBLISHABLE_KEY")||Deno.env.get("
 const BUCKET="cbted-project-assets";
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const COMMON={"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type","access-control-allow-methods":"GET,POST,OPTIONS"};
-const VALID_TABLES=new Set(["projects","assets","production_runs","production_steps","cbted_media_jobs","cbted_media_job_events"]);
+const VALID_TABLES=new Set(["projects","assets","project_rules","production_runs","production_steps","cbted_media_jobs","cbted_media_job_events"]);
 function result(data,status=200){return new Response(JSON.stringify(data),{status,headers:COMMON});}
 const requiredId=(x,label)=>{if(!UUID.test(String(x||"")))throw Error("Invalid "+label);return x;};
 const number=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0;
@@ -315,7 +315,27 @@ async function reference(user,body){
  const project=requiredId(body.project_id,"project");
  await ownedProject(user,project);
  const kind=["image","video","audio"].includes(body.kind)?body.kind:"image";
- const asset=await ownedAsset(project,body.asset_id,kind);
+ let asset;
+ try{asset=await ownedAsset(project,body.asset_id,kind);}
+ catch(error){
+  if(kind!=="image" || String(error?.message)!=="Saved project asset was not found")throw error;
+  // A locked reference may be stored in the owner's shared library. Never resolve
+  // arbitrary foreign assets or expand an unlocked/revoked reference list.
+  const rules=await db("project_rules","GET",{project_id:"eq."+project,
+   rule_key:"eq.image_generation_settings",scope:"in.(visual,project)",
+   select:"scope,body,is_locked,revision_number",order:"revision_number.desc"});
+  const current=new Map();
+  for(const row of rules||[])if(!current.has(row.scope))current.set(row.scope,row);
+  const locked=[...current.values()].filter(row=>row.is_locked===true);
+  const authorized=locked.some(row=>{
+   try{const settings=JSON.parse(row.body);
+    return Array.isArray(settings.reference_ids)&&settings.reference_ids.includes(body.asset_id);
+   }catch{return false;}
+  });
+  if(!authorized)throw error;
+  asset=await ownedReference(user,body.asset_id);
+  if(!String(asset.mime_type||"").startsWith("image/"))throw error;
+ }
  if(!asset.storage_path||asset.storage_path.includes(".."))throw Error("Invalid stored asset path");
  const res=await fetch(ROOT+"/storage/v1/object/sign/"+BUCKET+"/"+asset.storage_path,{method:"POST",
   headers:{apikey:SERVICE,Authorization:"Bearer "+SERVICE,"Content-Type":"application/json"},
@@ -324,7 +344,7 @@ async function reference(user,body){
  const data=await res.json(),link=data.signedURL||data.signedUrl;
  if(!link)throw Error("Reference image URL not returned");
  const temporary=link.startsWith("http")?link:ROOT+"/storage/v1"+(link.startsWith("/")?link:"/"+link);
- return {project_id:project,asset_id:asset.id,media_type:asset.mime_type,
+ return {project_id:project,reference_project_id:asset.project_id,asset_id:asset.id,media_type:asset.mime_type,
   expires_in_seconds:900,temporary_asset_url:temporary,
   ...(kind==="image"?{temporary_image_url:temporary}:{})};
 }
