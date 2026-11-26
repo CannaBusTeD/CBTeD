@@ -37,7 +37,21 @@ const tools = [
   tool("cbted_media_prepare","Prepare one GPT image, Runway/Higgsfield image/video, or Suno/ElevenLabs audio generation. Register the prompt and project only; no generation starts. Connectors must supply a real quote before paid media generation.",{
     project_id:U,run_id:U,step_key:S,provider:{type:"string",enum:["chatgpt","runway","higgsfield","suno","elevenlabs"]},
     kind:{type:"string",enum:["image","video","audio"]},model:S,prompt:S,aspect_ratio:S,duration:{type:"integer",minimum:1,maximum:360},
-    source_asset_id:U},["project_id","provider","kind","prompt"],false),
+    source_asset_id:U,
+    quality:{type:"object",description:"Versioned scene contract for image or video. Carry the approved scene settings and real attachment receipt into the media service.",
+      properties:{
+        version:{type:"integer",enum:[1]},scene_id:S,scene_count:{type:"integer",enum:[1]},
+        output_count:{type:"integer",enum:[1]},presentation:{type:"string",enum:["individual"]},
+        requested_provider:S,selected_provider:S,text_policy:{type:"string",enum:["none","title"]},
+        required_character_asset_ids:{type:"array",items:U,uniqueItems:true},
+        attached_character_asset_ids:{type:"array",items:U,uniqueItems:true},reference_attachment_receipt:S,
+        title_lines:{type:"array",items:S},multi_panel:{type:"boolean"},output_format:S,
+        camera_action:S,reference_frames_are_cuts:{type:"boolean"},exact_endpoints_required:{type:"boolean"},
+        endpoint_controls_verified:{type:"boolean"},start_frame_asset_id:U,end_frame_asset_id:U,
+        source_image_has_text:{type:"boolean"},reuse_title_artwork_as_scene:{type:"boolean"},
+        tool_switched:{type:"boolean"},user_approved_switch:{type:"boolean"},user_authorised_identical_retry:{type:"boolean"}
+      },required:["version","scene_id","scene_count","output_count","presentation","requested_provider","text_policy","required_character_asset_ids","attached_character_asset_ids"],additionalProperties:false}
+    },["project_id","provider","kind","prompt"],false),
   tool("cbted_media_quote","Record exact credits from a real connected provider cost estimate, and subscription-INCLUDED credits from a live provider balance. Purchased/total credits do not count as included. An uncertain or over-allowance quote must wait for creator approval.",{
     job_id:U,estimated_credits:{type:"number",minimum:0},billing_mode:{type:"string",enum:["credits","free_generation"]},
     included_remaining:{type:"number",minimum:0},allowance_source:{type:"string",enum:["unknown","provider_tool","user_entered"]},observed_at:S},["job_id","estimated_credits"],false),
