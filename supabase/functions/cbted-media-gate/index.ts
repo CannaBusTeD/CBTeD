@@ -9,7 +9,7 @@ const SERVICE=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
 const PUB=(()=>{const v=Deno.env.get("SUPABASE_PUBLISHABLE_KEY")||Deno.env.get("SUPABASE_ANON_KEY");if(v)return v;try{return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")||"{}").default||""}catch{return ""}})();
 const BUCKET="cbted-project-assets";
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-const COMMON={"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type","access-control-allow-methods":"GET,POST,OPTIONS"};
+const COMMON={"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type,x-client-info","access-control-allow-methods":"GET,POST,OPTIONS"};
 const VALID_TABLES=new Set(["projects","assets","production_runs","production_steps","cbted_media_jobs","cbted_media_job_events"]);
 function result(data,status=200){return new Response(JSON.stringify(data),{status,headers:COMMON});}
 const requiredId=(x,label)=>{if(!UUID.test(String(x||"")))throw Error("Invalid "+label);return x;};
@@ -51,8 +51,9 @@ async function ownedAsset(projectId,assetId,kind){
 }
 async function ownedReference(user,assetId){
  requiredId(assetId,"character reference");
- const rows=await db("assets","GET",{id:"eq."+assetId,asset_role:"eq.reference",select:"id,project_id,mime_type,storage_path",limit:"1"});
- if(rows?.length!==1||!String(rows[0].mime_type||"").startsWith("image/"))throw Error("Approved image reference was not found");
+ const rows=await db("assets","GET",{id:"eq."+assetId,select:"id,project_id,mime_type,storage_path,asset_role",limit:"1"});
+ if(rows?.length!==1||!["reference","character_reference"].includes(String(rows[0].asset_role||""))||
+    !String(rows[0].mime_type||"").startsWith("image/"))throw Error("Approved image reference was not found");
  await ownedProject(user,rows[0].project_id);
  if(!rows[0].storage_path)throw Error("Reference has no stored image");
  return rows[0];
@@ -254,6 +255,9 @@ async function importResult(user,body){
  if(declared>limit)throw Error("Generated file exceeds safe import size");
  const data=new Uint8Array(await remote.arrayBuffer());
  if(!data.length||data.length>limit)throw Error("Imported file is empty or too large");
+ return persistResult(user,job,type,data);
+}
+async function persistResult(user,job,type,data){
  const extension=mediaType(data,type);
  const digest=await mediaDigest(data);
  const reservation=type+":"+digest;
@@ -289,6 +293,111 @@ async function importResult(user,body){
  await audit(user,job.id,"imported",{asset_id:record.id,bytes:data.byteLength,mime_type:type});
  return {job_id:job.id,status:"needs_review",asset_id:record.id,bytes:data.byteLength,
   message:"Real private media saved. Creative review required before completion."};
+}
+const PNG_LIMIT=25000000;
+async function readNativePng(request){
+ if(request.headers.get("content-type")?.split(";")[0]!=="image/png"||!request.body)
+  throw Error("Expected the generated PNG bytes");
+ if(Number(request.headers.get("content-length"))>PNG_LIMIT)throw Error("PNG exceeds import limit");
+ const reader=request.body.getReader(), chunks=[];
+ let size=0;
+ try{
+  while(true){
+   const {done,value}=await reader.read();
+   if(done)break;
+   size+=value.length;
+   if(size>PNG_LIMIT){await reader.cancel();throw Error("PNG exceeds import limit");}
+   chunks.push(value);
+  }
+ }finally{reader.releaseLock();}
+ const bytes=new Uint8Array(size);
+ let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+ const signature=[137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82];
+ const end=[0,0,0,0,73,69,78,68,174,66,96,130];
+ if(size<57||!signature.every((b,i)=>bytes[i]===b)||!end.every((b,i)=>bytes[size-12+i]===b))
+  throw Error("Invalid or incomplete PNG");
+ return bytes;
+}
+// Native workers receive a short-lived, write-only grant for the digest already
+// recorded under their authenticated claim. The ordinary OAuth token stays in MCP.
+const NATIVE_DIGEST=/^native-png-sha256:([a-f0-9]{64})$/;
+async function nativeUploadKey(){
+ return crypto.subtle.importKey("raw",new TextEncoder().encode(SERVICE),
+  {name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
+}
+function grantMessage(user,jobId,project,run,step,digest,expires){
+ return new TextEncoder().encode(JSON.stringify(["cbted/native-png/v1",ROOT,user,jobId,project,run,step,digest,expires]));
+}
+async function issueNativeGrant(user,job,digest){
+ await checkNativeTarget(user,job,job.project_id,job.run_id,job.step_key);
+ const expires=String(Math.floor(Date.now()/1000)+600);
+ const signature=await crypto.subtle.sign("HMAC",await nativeUploadKey(),
+  grantMessage(user,job.id,job.project_id,job.run_id,job.step_key,digest,expires));
+ const query=new URLSearchParams({job_id:job.id,project_id:job.project_id,run_id:job.run_id,step_key:job.step_key});
+ return {url:ROOT+"/functions/v1/cbted-media-gate/import-native-png?"+query,
+  authorization:"CBTeD-Upload "+[user,digest,expires,btoa(String.fromCharCode(...new Uint8Array(signature)))].join("."),
+  expires_in_seconds:600,content_type:"image/png",method:"POST"};
+}
+async function nativeGrantOwner(request,url){
+ const header=request.headers.get("Authorization")||"";
+ if(!header.startsWith("CBTeD-Upload "))return null;
+ environment();
+ const parts=header.slice("CBTeD-Upload ".length).split(".");
+ const [user,digest,expires,mac]=parts;
+ const now=Math.floor(Date.now()/1000);
+ if(parts.length!==4||!UUID.test(user)||!/^[a-f0-9]{64}$/.test(digest)||!/^\d{10}$/.test(expires)||
+    +expires<now||+expires>now+600||!/^[A-Za-z0-9+/]{43}=$/.test(mac))throw Error("Invalid or expired native upload grant");
+ const q=url.searchParams;
+ const message=grantMessage(user,q.get("job_id"),q.get("project_id"),q.get("run_id"),q.get("step_key"),digest,expires);
+ if(!await crypto.subtle.verify("HMAC",await nativeUploadKey(),Uint8Array.from(atob(mac),c=>c.charCodeAt(0)),message))
+  throw Error("Invalid native upload grant");
+ return {user,digest};
+}
+async function checkNativeTarget(user,job,project,run,step){
+ await ownedProject(user,project);
+ 
+ if(job.project_id!==project||job.run_id!==run||job.step_key!==step||!/^visual_generate_[1-9]\d*$/.test(step)||
+    job.provider!=="chatgpt"||job.kind!=="image"||job.billing_mode!=="native"||job.quote_credits!==0||job.approval_required!==false)
+  throw Error("The file must match the exact owned native zero-credit image job");
+ if(!job.result_asset_id){
+  const stages=await db("production_steps","GET",{project_id:"eq."+project,run_id:"eq."+run,step_key:"eq."+step,select:"status,kind",limit:"1"});
+  if(!job.claimed_at||!["claimed","submitted"].includes(job.status)||stages?.[0]?.status!=="in_progress"||stages[0].kind!=="image")
+   throw Error("The image job and its generation stage must already be claimed");
+ }
+}
+async function importNativePng(user,request,url,requiredDigest=null){
+ const jobId=requiredId(url.searchParams.get("job_id"),"job");
+ const project=requiredId(url.searchParams.get("project_id"),"project");
+ const run=requiredId(url.searchParams.get("run_id"),"run");
+ const step=url.searchParams.get("step_key");
+ const job=await ownedJob(user,jobId);
+ await checkNativeTarget(user,job,project,run,step);
+ const data=await readNativePng(request), digest=await mediaDigest(data);
+ if(requiredDigest && requiredDigest!==digest)throw Error("PNG differs from the authorised digest");
+ if(!job.result_asset_id){
+  if(job.provider_job_id?.startsWith("native-png-sha256:")&&job.provider_job_id!=="native-png-sha256:"+digest)
+   throw Error("The submitted native artifact has a different digest");
+  if(job.status==="claimed"){
+   // A native local artifact has no external task ID. Identify the actual bytes received.
+   const nativeId="native-png-sha256:"+digest;
+   await submitted(user,{job_id:job.id,provider_job_id:nativeId});
+   job.provider_job_id=nativeId;
+  }
+  await persistResult(user,job,"image/png",data);
+ }
+ const current=await ownedJob(user,jobId);
+ if(current.result_asset_id!==job.id||current.import_digest!=="image/png:"+digest)
+  throw Error("The saved file differs from the incoming PNG");
+ const asset=await ownedAsset(project,job.id,"image");
+ const path=user+"/"+project+"/images/"+job.id+".png";
+ if(asset.storage_path!==path||asset.metadata?.job_id!==job.id)throw Error("Private asset binding mismatch");
+ const readback=await fetch(ROOT+"/storage/v1/object/authenticated/"+BUCKET+"/"+path,
+  {headers:{apikey:SERVICE,Authorization:"Bearer "+SERVICE}});
+ if(!readback.ok)throw Error("Private asset readback failed");
+ const stored=await readback.arrayBuffer();
+ if(stored.byteLength!==data.length||await mediaDigest(stored)!==digest)throw Error("Private asset readback mismatch");
+ return {job_id:job.id,asset_id:asset.id,status:current.status,bytes:stored.byteLength,sha256:digest,private_bytes_verified:true};
 }
 async function verify(account,body){
  const job=await ownedJob(account.id,body.job_id);
@@ -331,8 +440,12 @@ async function reference(user,body){
 Deno.serve(async(request)=>{
  if(request.method==="OPTIONS")return new Response(null,{status:204,headers:COMMON});
  const url=new URL(request.url),action=url.pathname.split("/").pop();
- if(request.method==="GET"&&action==="health")return result({name:"CBTeD Media Gate",status:"online",paid_generation:"delegated to authorised ChatGPT tools",media_import_configured:!!Deno.env.get("CBTED_MEDIA_ALLOWED_HOSTS")});
+ if(request.method==="GET"&&action==="health")return result({name:"CBTeD Media Gate",status:"online",paid_generation:"delegated to authorised ChatGPT tools",media_import_configured:!!Deno.env.get("CBTED_MEDIA_ALLOWED_HOSTS"),native_png_import:1});
  try{
+  if(request.method==="POST"&&action==="import-native-png"){
+   const grant=await nativeGrantOwner(request,url);
+   if(grant)return result(await importNativePng(grant.user,request,url,grant.digest));
+  }
   const user=await currentUser(request);
   if(request.method==="GET"&&action==="jobs"){
    await ownedProject(user.id,url.searchParams.get("project_id"));
@@ -341,6 +454,7 @@ Deno.serve(async(request)=>{
    return result({jobs});
   }
   if(request.method!=="POST")return result({error:"Method not supported"},405);
+  if(action==="import-native-png")return result(await importNativePng(user.id,request,url));
   if(Number(request.headers.get("content-length")||0)>45000)return result({error:"Request too large"},413);
   const body=await request.json();
   if(!body||typeof body!=="object"||Array.isArray(body))throw Error("Invalid JSON object");
@@ -348,7 +462,14 @@ Deno.serve(async(request)=>{
   if(action==="quote")return result(await requote(user.id,body));
   if(action==="approve")return result(await decide(user.id,body));
   if(action==="claim")return result(await claim(user,body));
-  if(action==="submitted")return result(await submitted(user.id,body));
+  if(action==="submitted"){
+   const digest=NATIVE_DIGEST.exec(body.provider_job_id)?.[1];
+   if(!digest)return result(await submitted(user.id,body));
+   const job=await ownedJob(user.id,body.job_id);
+   const grant=await issueNativeGrant(user.id,job,digest);
+   const receipt=await submitted(user.id,body);
+   return result({...receipt,private_png_upload:grant});
+  }
   if(action==="import")return result(await importResult(user.id,body));
   if(action==="verify")return result(await verify(user,body));
   if(action==="reference")return result(await reference(user.id,body));
@@ -359,3 +480,4 @@ Deno.serve(async(request)=>{
   return result({error:reason},status);
  }
 });
+
