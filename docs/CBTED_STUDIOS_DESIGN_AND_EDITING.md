@@ -3,6 +3,18 @@
 ## Product identity
 Use **CBTeD StudioS** exactly, including the capital final **S**, in all user-visible labels. Keep repository names, OAuth resource IDs, database functions and published existing asset names unchanged where renaming would break clients.
 
+## Studio entry, navigation and connections
+
+Build and review changes in GitHub. The Studio frontend lives in CannaBusTeD/inclusive-video-chorus. This repository owns the shared product instructions and canonical backend. A Studio change request does not authorise spending Lovable builder credits. Run that builder only at the owner's explicit request.
+
+The welcome page says “Welcome to CBTeD StudioS” and offers “Sign in” and “Sign up”. Use the canonical Studio identity once and restore it across refreshes, project links and department changes. Keep legacy publishing records owner-scoped. An external service may require its own connection under Links. A temporary service failure should offer a retry and preserve the existing session.
+
+After entry explain that Studio brings creative tools together on the same project. Projects, Creative Studio and Links are easy to find. Creative Studio has exactly four departments, in order: Ideas, Writing, Image, Video. Each opens directly and is also accessible within a project. Ideas opens a conversation about what the creator wants to make, before project selection. The optional idea-through-publish workflow can carry work between departments. Keep music, review and publishing actions reachable in context.
+
+Links gathers the creator's website, AI assistants including Muse, Claude and ChatGPT, generation tools and social accounts. “Link socials” opens social connection controls. Use real provider authorisation where available and “Coming later” for unwired integrations. Show an existing connection without repeating setup. At the very bottom of each department place one optional link to its corresponding section: “Link idea tools”, “Link writing tools”, “Link image tools” or “Link video tools”. Support keyboard and screen-reader navigation back to the work.
+
+Perform health checks quietly. Surface a specific problem and next action only when it affects what the creator is doing. Check keyboard order, heading focus, accessible names and the actual destinations, including the return after linking.
+
 ## Design brief (public-facing guidance only)
 A restrained modern-gothic theatre world: faded crimson velvet, torn but subtle wallpaper, weathered stage brass, soot, aged parchment, and small accents of decay. A contemporary working studio inside Ted World, **not** a decorative haunted-house landing page.
 
