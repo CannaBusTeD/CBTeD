@@ -141,6 +141,17 @@ export function authorisation({plan,step_key,states={},approvals={},rules_change
   if(step.approval_required&&approvals[step.key]!=="approved")return {allowed:false,reason:"Explicit step approval is missing or revoked"};
   return {allowed:true,reason:"Eligible for an atomic claim"};
 }
+// Keep audit history in storage, but expose only authoritative rule heads to agents.
+export function projectRuleWindow(rules){
+  const superseded=new Set(rules.map(rule=>rule.supersedes_id).filter(Boolean));
+  const current=rules.filter(rule=>!superseded.has(rule.id));
+  const previousIds=new Set(current.map(rule=>rule.supersedes_id).filter(Boolean));
+  const previous=rules.filter(rule=>previousIds.has(rule.id)&&superseded.has(rule.id));
+  return {current,previous};
+}
+export function effectiveProjectRules(rules){
+  return projectRuleWindow(rules).current;
+}
 export function modelInstruction(step,masterRules,projectRules,original,priorResults,instructions){
   if(!step||!AGENTS[step.agent])throw Error("Unknown agent");
   const payload=[

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import {projectRuleWindow} from "../supabase/functions/_shared/production.mjs";
 
 const root = "../supabase/functions/cbted-mcp/";
 const moduleText=readFileSync(new URL(root+"index.ts",import.meta.url),"utf8");
@@ -9,7 +10,7 @@ const docs=Array.from({length:9},(_,i)=>{
  return JSON.parse(text.replace(/^export const document = /,"").trim().replace(/;$/,""));
 });
 const rulebook=Object.fromEntries(docs.map(x=>[x.path,{sha:x.sha,content:x.content}]));
-const source=moduleText.replace('import {RULEBOOK} from "./rulebook.ts";',"const RULEBOOK = "+JSON.stringify(rulebook)+";");
+const source=moduleText.replace('import {RULEBOOK} from "./rulebook.ts";',"const RULEBOOK = "+JSON.stringify(rulebook)+";").replace('import {projectRuleWindow} from "../_shared/production.mjs";',projectRuleWindow.toString());
 assert.match(source, /CBTeD ChatGPT MCP bridge/);
 const projectRef = "dmzzyfiwtosxtyekpbfi";
 const base = "https://" + projectRef + ".supabase.co/functions/v1/cbted-mcp";
@@ -39,6 +40,10 @@ const fakeFetch=async(url,options={})=>{
   if(uri.includes("/rest/v1/projects?")){
     return new Response(JSON.stringify([{id:"00000000-0000-4000-8000-000000000002",owner_id:testUser,title:"Test Project",status:"active"}]),{status:200});
   }
+  if(uri.includes("/rest/v1/project_rules?")){
+    return new Response(JSON.stringify([{id:"r3",supersedes_id:"r2",body:"current"},{id:"r2",supersedes_id:"r1",body:"rollback"},{id:"r1",body:"obsolete"},{id:"other",body:"independent"}]),{status:200});
+  }
+  if(uri.includes("/rest/v1/"))return new Response("[]",{status:200});
   throw Error("Unexpected network call to "+uri);
 };
 const sandbox={
@@ -194,3 +199,16 @@ assert.equal(directPlan.stages.filter(x=>x.agent==="video_generator").length,2);
 assert.ok(!directPlan.stages.some(x=>x.studio==="writing"||x.studio==="visual"||x.studio==="audio"));
 const stillRequired=await rpc("tools/call",{name:"cbted_route_task",arguments:{intent:"video_from_assets",has_existing_source:true,has_image:false}},true);
 assert.equal(stillRequired.result.isError,true,"Image-to-video must still require its source image");
+
+const contextArgs={project_id:"00000000-0000-4000-8000-000000000002"};
+const workingContext=await rpc("tools/call",{name:"cbted_get_project_context",arguments:contextArgs},true);
+assert.equal(workingContext.result.isError,false);
+const working=JSON.parse(workingContext.result.content[0].text);
+assert.deepEqual(working.rules.map(r=>r.id),["r3","other"]);
+assert.equal(working.previous_rules,undefined);
+const rollbackContext=await rpc("tools/call",{name:"cbted_get_project_context",arguments:{...contextArgs,include_previous_rules:true}},true);
+assert.equal(rollbackContext.result.isError,false);
+const rollback=JSON.parse(rollbackContext.result.content[0].text);
+assert.deepEqual(rollback.rules.map(r=>r.id),["r3","other"]);
+assert.deepEqual(rollback.previous_rules.map(r=>r.id),["r2"]);
+console.log("Current rules and single rollback revision MCP isolation passed.");

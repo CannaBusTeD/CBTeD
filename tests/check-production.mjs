@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {readFileSync} from "node:fs";
-import {AGENTS,GATED_KINDS,buildPlan,authorisation,modelInstruction,parseImageSize,reviewPassed} from "../supabase/functions/_shared/production.mjs";
+import {AGENTS,GATED_KINDS,buildPlan,authorisation,modelInstruction,parseImageSize,reviewPassed,effectiveProjectRules,projectRuleWindow} from "../supabase/functions/_shared/production.mjs";
 
 test("explanation and planning cannot authorise generation",()=>{
   const plan=buildPlan({workflow:"visual",intent:"plan"});
@@ -153,4 +153,24 @@ test("animation-only workflow accepts an idea and never mandates writing or stil
  assert.deepEqual(plan.steps.filter(s=>s.agent==="video_generator").map(s=>s.key),["animation_generate_1","animation_generate_2"]);
  assert.equal(plan.steps.find(s=>s.key==="animation_generate_1").approval_required,true);
  assert.equal(plan.steps.find(s=>s.key==="animation_generate_2").approval_required,true);
+});
+
+
+test("only current rules enter agent context; exactly one prior revision is available for rollback",()=>{
+ const rules=[
+  {id:"r3",scope:"project",rule_key:"provider",supersedes_id:"r2",body:"current"},
+  {id:"r2",scope:"visual",rule_key:"provider",supersedes_id:"r1",body:"obsolete second"},
+  {id:"r1",scope:"visual",rule_key:"provider",body:"obsolete first"},
+  {id:"independent",scope:"writing",rule_key:"provider",body:"independent"},
+  {id:"other",scope:"project",rule_key:"voice",body:"keep"}
+ ];
+ assert.deepEqual(effectiveProjectRules(rules).map(r=>r.id),["r3","independent","other"]);
+ assert.deepEqual(projectRuleWindow(rules).previous.map(r=>r.id),["r2"]);
+ assert.equal(rules.length,5,"audit history must remain intact");
+ assert.deepEqual(effectiveProjectRules([{id:"new",supersedes_id:"not-in-result"}]).map(r=>r.id),["new"]);
+ assert.deepEqual(projectRuleWindow([]),{current:[],previous:[]});
+});
+test("orchestrator filters obsolete rules before agent prompts and provider settings",()=>{
+ const src=readFileSync(new URL("../supabase/functions/cbted-orchestrator/index.ts",import.meta.url),"utf8");
+ assert.ok(src.includes('const rules=effectiveProjectRules(await rest(token,"project_rules"'));
 });

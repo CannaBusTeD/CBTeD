@@ -2,6 +2,7 @@
 // No media provider is invoked here: ChatGPT runs available native creative tools.
 // Source snapshots are bundled verbatim from GitHub with their original blob SHAs.
 import {RULEBOOK} from "./rulebook.ts";
+import {projectRuleWindow} from "../_shared/production.mjs";
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") || "https://dmzzyfiwtosxtyekpbfi.supabase.co").replace(/\/$/, "");
 const RESOURCE = SUPABASE_URL + "/functions/v1/cbted-mcp";
 const METADATA = RESOURCE + "/.well-known/oauth-protected-resource";
@@ -18,7 +19,7 @@ const S={type:"string"}; const U={type:"string",format:"uuid"};
 const tools = [
   tool("cbted_get_rulebook","FIRST for any CBTeD creative work. Return the COMPLETE authoritative universal master workflow and the chosen studio procedure with content and source SHA. This server supplies rules, while ChatGPT itself uses its available native writing/image/video tools one operation at a time. Do not claim an action occurred until its native tool result is verified.",{studio:{type:"string",enum:["core","writing","visual","animation"],description:"Studio whose complete instructions should accompany universal rules."}},["studio"],true,true),
   tool("cbted_list_projects","List projects belonging to the authenticated user, preserving project identity and continuity.",{},[],true),
-  tool("cbted_get_project_context","Read an owned project, rules, source metadata, approvals, studio settings, assets, tasks, outputs and handoffs. For exact writing content call cbted_get_source_version after selecting the version.",{project_id:U},["project_id"],true),
+  tool("cbted_get_project_context","Read an owned project and its current effective rules, source metadata, approvals, studio settings, assets, tasks, outputs and handoffs. Superseded rules are excluded. Request include_previous_rules only to inspect the immediately preceding rule revisions for rollback. For exact writing content call cbted_get_source_version after selecting the version.",{project_id:U,include_previous_rules:{type:"boolean",description:"Explicit rollback inspection only; return one immediately preceding revision per current rule."}},["project_id"],true),
   tool("cbted_get_source_version","Retrieve the actual complete source-version text, ideas and suggestions without substituting a summary.",{project_id:U,source_version_id:U},["project_id","source_version_id"],true),
   tool("cbted_create_project","Create a user-owned persistent creative project; this does not begin generation.",{title:{type:"string",minLength:1,maxLength:200},description:S},["title"],false),
   tool("cbted_create_source","Register a titled song, story, poem, script, treatment or other source within an owned project before adding versions.",{project_id:U,title:{type:"string",minLength:1,maxLength:200},source_kind:S},["project_id","title"],false),
@@ -310,7 +311,8 @@ async function runTool(name,a,token,user){
    ]);
    const latestRun=production_runs[0];
    const production_steps=latestRun ? await rest(token,"production_steps",{...byProject(pid,"run_id,step_key,sequence_index,status,attempt_number,asset_id"),run_id:"eq."+latestRun.id,order:"sequence_index.asc",limit:"200"}) : [];
-   return {project:p,production_runs,production_steps,rules,sources,source_versions:versions,approvals,studio_settings:settings,assets,tasks,outputs,handoffs,note:"For production manuscripts and run evidence use cbted_get_production_status with the run ID. Read saved source versions with cbted_get_source_version. Read full master rules using cbted_get_rulebook. Output metadata alone is not evidence of generated media."};
+   const ruleWindow=projectRuleWindow(rules);
+   return {project:p,production_runs,production_steps,rules:ruleWindow.current,...(a.include_previous_rules===true?{previous_rules:ruleWindow.previous}:{}),sources,source_versions:versions,approvals,studio_settings:settings,assets,tasks,outputs,handoffs,note:"For production manuscripts and run evidence use cbted_get_production_status with the run ID. Read saved source versions with cbted_get_source_version. Read full master rules using cbted_get_rulebook. Output metadata alone is not evidence of generated media."};
  }
  if(name==="cbted_get_source_version"){
    await ownedProject(token,a.project_id);requireUUID(a.source_version_id,"source_version_id");

@@ -1,6 +1,6 @@
 // CBTeD authenticated orchestration gateway. GitHub is the code source of truth.
 // Native ChatGPT tools cannot be intercepted here. Backend-managed execution IS gated.
-import {AGENTS,buildPlan,authorisation,modelInstruction,parseImageSize,reviewPassed} from "../_shared/production.mjs";
+import {AGENTS,buildPlan,authorisation,modelInstruction,parseImageSize,reviewPassed,effectiveProjectRules} from "../_shared/production.mjs";
 import {inspectAudio,readReviewAudio} from "../_shared/audio-review.mjs";
 const ROOT=(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -377,7 +377,7 @@ async function executeOne(token,user,s,delegatedOperation=null){
  const src=s.run.source_version_id
    ? (await rest(token,"source_versions",{id:"eq."+s.run.source_version_id,project_id:"eq."+s.run.project_id,limit:"1"}))[0]
    : null;
- const rules=await rest(token,"project_rules",{project_id:"eq."+s.run.project_id,order:"created_at.desc",limit:"500"});
+ const rules=effectiveProjectRules(await rest(token,"project_rules",{project_id:"eq."+s.run.project_id,order:"created_at.desc",limit:"500"}));
  const original=[src?.content||"",src?.ideas||"",src?.suggested_text||""].filter(Boolean).join("\n\n");
  const projectRules=rules.map(r=>r.scope+" "+r.rule_key+" revision "+r.revision_number+" locked "+r.is_locked+": "+r.body).join("\n");
  let prompt=takePrompt(s,chosen,rulebook,original,projectRules);
