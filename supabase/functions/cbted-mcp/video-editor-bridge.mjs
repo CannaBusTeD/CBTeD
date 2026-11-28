@@ -50,16 +50,20 @@ export function videoEditorTools(tool) {
     ),
     tool(
       edit,
-      "Edit a saved Studio timeline when the creator asks. Read the latest timeline first and use its latestRevisionId as expectedRevisionId, or null for a new draft. Times are milliseconds. Remove a moment from all tracks with cut_range. Remove one whole item with remove_item, and set ripple true on Picture to shift other tracks. Mute a moment with set_volume_range, volume 0 and track all or a named track. Set effects with set_picture/set_overlay/set_title. Add media from the editor library, trim/split/move/duplicate items, detach audio, change the canvas, or restore a revision. All operations save as one new draft. Use preview true to calculate without saving. Use a fresh requestId for each new request; only reuse it for an exact retry. This tool does not render or publish. " +
+      "Edit a Studio timeline when the creator asks. Read the timeline first and supply its latestRevisionId. Omit expectedRevisionId only for an unsaved timeline. Use read mode commands for verified operation syntax. Cut time with cut_range, mute with set_volume_range and volume 0, and apply effects with set_picture, set_overlay or set_title. Saves all operations as one draft. Set preview to calculate without saving. Use a fresh requestId for every new edit. No render or publish. " +
         scopeHelp,
       {
         ...selector,
-        expectedRevisionId: { anyOf: [uuid, { type: "null" }] },
+        expectedRevisionId: uuid,
         requestId: uuid,
-        operations: videoOperations,
+        operationsJson: {
+          type: "string",
+          description:
+            'JSON array of operations in milliseconds, such as [{"op":"cut_range","startMs":2000,"endMs":3000}].',
+        },
         preview: { type: "boolean" },
       },
-      ["expectedRevisionId", "requestId", "operations"],
+      ["requestId", "operationsJson"],
       false,
     ),
     tool(
@@ -103,7 +107,10 @@ export function videoEditorTools(tool) {
         ["file"],
         false,
       ),
-      _meta: { "openai/fileParams": ["file"] },
+      _meta: {
+        "openai/fileParams": ["file"],
+        securitySchemes: [{ type: "oauth2", scopes: [] }],
+      },
     },
   ];
 }
@@ -118,6 +125,23 @@ function values(input, keys) {
       .filter((key) => input[key] !== undefined)
       .map((key) => [key, input[key]]),
   );
+}
+
+function editOperations(input) {
+  if (input.operationsJson === undefined && Array.isArray(input.operations))
+    return input.operations;
+  if (
+    typeof input.operationsJson !== "string" ||
+    input.operations !== undefined
+  )
+    throw new Error("Provide one JSON array of edit operations.");
+  try {
+    const operations = JSON.parse(input.operationsJson);
+    if (Array.isArray(operations)) return operations;
+  } catch {
+    // Report an actionable error without returning user content.
+  }
+  throw new Error("Provide a valid JSON array of edit operations.");
 }
 
 const readFields = {
@@ -163,12 +187,9 @@ export async function runVideoEditorTool(
   } else if (name === edit) {
     request = {
       action: "edit",
-      ...values(input, [
-        "expectedRevisionId",
-        "requestId",
-        "operations",
-        "preview",
-      ]),
+      expectedRevisionId: input.expectedRevisionId ?? null,
+      ...values(input, ["requestId", "preview"]),
+      operations: editOperations(input),
     };
   } else if (name === render && mode === "render") {
     request = {
