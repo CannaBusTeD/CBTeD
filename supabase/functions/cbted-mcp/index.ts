@@ -3,6 +3,7 @@
 // Source snapshots are bundled verbatim from GitHub with their original blob SHAs.
 import {RULEBOOK} from "./rulebook.ts";
 import { addVideoTimelineTitle, readVideoTimeline, timelineProject } from "./video-timeline.mjs";
+import { isVideoEditorTool, runVideoEditorTool, videoEditorTools } from "./video-editor-bridge.mjs";
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") || "https://dmzzyfiwtosxtyekpbfi.supabase.co").replace(/\/$/, "");
 const RESOURCE = SUPABASE_URL + "/functions/v1/cbted-mcp";
 const METADATA = RESOURCE + "/.well-known/oauth-protected-resource";
@@ -19,6 +20,7 @@ const S={type:"string"}; const U={type:"string",format:"uuid"};
 const timelineTarget = { project_id: U, project_name: {type:"string",minLength:1,maxLength:200} };
 const timelineTime = {type:"integer",minimum:0};
 const tools = [
+  ...videoEditorTools(tool),
   tool("cbted_get_rulebook","FIRST for any CBTeD creative work. Return the COMPLETE authoritative universal master workflow and the chosen studio procedure with content and source SHA. This server supplies rules, while ChatGPT itself uses its available native writing/image/video tools one operation at a time. Do not claim an action occurred until its native tool result is verified.",{studio:{type:"string",enum:["core","writing","visual","animation"],description:"Studio whose complete instructions should accompany universal rules."}},["studio"],true,true),
   tool("cbted_list_projects","List projects belonging to the authenticated user, preserving project identity and continuity.",{},[],true),
   tool("cbted_get_project_context","Read an owned project, rules, assets, tasks, outputs, handoffs and the saved video timeline, including its duration and revision. For exact writing content call cbted_get_source_version after selecting the version.",{project_id:U},["project_id"],true),
@@ -155,6 +157,7 @@ async function rest(token,table,query={},method="GET",body=null){
 }
 const byProject=(id,select="*")=>({project_id:"eq."+id,select,limit:"50"});
 async function runTool(name,a,token,user){
+ if(isVideoEditorTool(name)) return runVideoEditorTool(name,a,rest,token,user.id,fetch);
  const mediaActions={
   cbted_media_jobs:"jobs",cbted_media_prepare:"prepare",cbted_media_quote:"quote",
   cbted_media_approve:"approve",cbted_media_claim:"claim",cbted_media_submitted:"submitted",

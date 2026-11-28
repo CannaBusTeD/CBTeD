@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { addVideoTimelineTitle, readVideoTimeline, timelineProject } from "../supabase/functions/cbted-mcp/video-timeline.mjs";
+import { isVideoEditorTool, runVideoEditorTool, videoEditorTools } from "../supabase/functions/cbted-mcp/video-editor-bridge.mjs";
 
 const root = "../supabase/functions/cbted-mcp/";
 const moduleText=readFileSync(new URL(root+"index.ts",import.meta.url),"utf8");
@@ -11,7 +12,7 @@ const docs=Array.from({length:9},(_,i)=>{
 });
 const rulebook=Object.fromEntries(docs.map(x=>[x.path,{sha:x.sha,content:x.content}]));
 const source=moduleText.replace('import {RULEBOOK} from "./rulebook.ts";',"const RULEBOOK = "+JSON.stringify(rulebook)+";")
-  .replace(/^import .* from "\.\/video-timeline\.mjs";\n/m, "");
+  .replace(/^import .* from "\.\/video-(?:timeline|editor-bridge)\.mjs";\n/gm, "");
 assert.match(source, /CBTeD ChatGPT MCP bridge/);
 const projectRef = "dmzzyfiwtosxtyekpbfi";
 const base = "https://" + projectRef + ".supabase.co/functions/v1/cbted-mcp";
@@ -26,6 +27,7 @@ const timelinePlan = {schema:"cbted-video-edit-v1",aspect:"16:9",fps:30,audio:[]
 let timelineRows = [{project_id:testProject.id,id:timelineId,version:1,plan:timelinePlan,created_at:"2026-11-28T10:00:00Z"}];
 let titleWrites = 0;
 let duplicatedName = false;
+const editorCalls = [];
 let handler;
 let networkCalls=0;
 let authenticated=false;
@@ -47,6 +49,15 @@ const fakeFetch=async(url,options={})=>{
     const body=JSON.parse(options.body||"{}");
     if(body.action==="list")return new Response(JSON.stringify({reviews:[]}),{status:200});
     return new Response(JSON.stringify({error:"Mock denies unplanned review write"}),{status:403});
+  }
+  if (uri === "https://studio.cannabusted.com/api/video-editor-agent") {
+    assert.equal(options.method, "POST");
+    assert.equal(options.redirect, "manual");
+    assert.equal(options.headers.Authorization, "Bearer mocked-test-token");
+    const payload = JSON.parse(options.body);
+    assert.ok(payload.projectId === testProject.id || payload.projectId === null);
+    editorCalls.push(payload);
+    return Response.json({ revisionId: timelineId, durationMs: 4200, saved: payload.action === "edit" });
   }
   if(uri.includes("/rest/v1/projects?")){
     const query=new URL(uri).searchParams;
@@ -80,7 +91,8 @@ const sandbox={
     if(key==="SUPABASE_PUBLISHABLE_KEYS")return JSON.stringify({default:"sb_publishable_test_only"});
     return null;
   }},serve(fn){handler=fn;}},
-  Request,Response,URL,URLSearchParams,fetch:fakeFetch,console,addVideoTimelineTitle,readVideoTimeline,timelineProject
+  Request,Response,URL,URLSearchParams,fetch:fakeFetch,console,addVideoTimelineTitle,readVideoTimeline,timelineProject,
+  isVideoEditorTool,runVideoEditorTool,videoEditorTools
 };
 vm.runInNewContext(source,sandbox,{filename:"cbted-mcp/index.ts"});
 assert.equal(typeof handler,"function","Deno must register an HTTP handler");
@@ -177,6 +189,23 @@ timelineRows=[];
 const noDraft=await readTimeline({project_id:testProject.id});
 assert.equal(noDraft.structuredContent.state,"no_saved_draft");
 assert.equal(noDraft.structuredContent.videos[0].duration_ms,5200);
+const editorNames = ["cbted_video_editor_read", "cbted_video_editor_edit", "cbted_video_editor_render", "cbted_video_editor_import"];
+for (const name of editorNames) assert.ok(names.includes(name));
+const importTool = list.result.tools.find((entry) => entry.name === editorNames[3]);
+assert.deepEqual(importTool._meta["openai/fileParams"], ["file"]);
+assert.equal(list.result.tools.find((entry) => entry.name === editorNames[0]).annotations.readOnlyHint, true);
+assert.equal(list.result.tools.find((entry) => entry.name === editorNames[1]).annotations.readOnlyHint, false);
+const operations = [{ op: "cut_range", startMs: 1250, endMs: 1750 }];
+const editInput = { project_name: "Test Project", expectedRevisionId: timelineId, requestId: titleRequest, operations };
+assert.equal((await timelineCall(editorNames[1], editInput, false)).isError, true);
+assert.equal((await timelineCall(editorNames[0], { project_name: "Test Project", workspace: "personal" })).isError, true);
+assert.equal(editorCalls.length, 0, "Unverified or conflicting requests must never call Studio");
+const commands = await timelineCall(editorNames[0], { mode: "commands" });
+assert.ok(commands.structuredContent.operations.items.anyOf.some((item) => item.properties.op.const === "cut_range"));
+assert.equal((await timelineCall(editorNames[1], editInput)).structuredContent.saved, true);
+assert.deepEqual(editorCalls.at(-1), { action: "edit", projectId: testProject.id, expectedRevisionId: timelineId, requestId: titleRequest, operations });
+assert.equal((await timelineCall(editorNames[0], {workspace: "personal", mode: "history", limit: 2})).isError, false);
+assert.deepEqual(editorCalls.at(-1), { action: "history", projectId: null, limit: 2 });
 const notification=await handler(new Request(base,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized"})}));
 assert.equal(notification.status,202);
 console.log("CBTeD MCP protocol/auth/rules smoke tests passed ("+list.result.tools.length+" tools).");
