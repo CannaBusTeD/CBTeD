@@ -468,7 +468,7 @@ Deno.serve(async(request)=>{
    if(!signedIn)return unauthorized();
    const versions=["2025-11-25","2025-06-18","2025-03-26","2024-11-05"];
    const asked=rpc.params?.protocolVersion;
-   return response(reply(rpc.id,{protocolVersion:versions.includes(asked)?asked:"2025-06-18",capabilities:{tools:{listChanged:false}},serverInfo:{name:"CBTeD",version:"0.1.0"},instructions:"Call cbted_get_rulebook first for the full authoritative rules before any creative work. Use ChatGPT native tools to perform each requested output independently; MCP is only the project memory/rules bridge. Never claim an output exists from a task record alone."}));
+   return response(reply(rpc.id,{protocolVersion:versions.includes(asked)?asked:"2025-06-18",capabilities:{tools:{listChanged:false}},serverInfo:{name:"CBTeD",version:"0.1.0"},instructions:"Call cbted_get_rulebook first for creative production rules. Use CBTeD Video Editor tools to read or edit an existing saved Studio timeline and export through the private Mac when asked. Use the relevant native ChatGPT tools for other creative outputs. Never claim an output exists from a task record alone."}));
  }
  if(rpc.method==="ping")return response(reply(rpc.id,{}));
  if(rpc.method==="tools/list")return response(reply(rpc.id,{tools}));
