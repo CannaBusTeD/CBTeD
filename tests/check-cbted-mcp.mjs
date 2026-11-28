@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { addVideoTimelineTitle, readVideoTimeline, timelineProject } from "../supabase/functions/cbted-mcp/video-timeline.mjs";
 
 const root = "../supabase/functions/cbted-mcp/";
 const moduleText=readFileSync(new URL(root+"index.ts",import.meta.url),"utf8");
@@ -9,11 +10,22 @@ const docs=Array.from({length:9},(_,i)=>{
  return JSON.parse(text.replace(/^export const document = /,"").trim().replace(/;$/,""));
 });
 const rulebook=Object.fromEntries(docs.map(x=>[x.path,{sha:x.sha,content:x.content}]));
-const source=moduleText.replace('import {RULEBOOK} from "./rulebook.ts";',"const RULEBOOK = "+JSON.stringify(rulebook)+";");
+const source=moduleText.replace('import {RULEBOOK} from "./rulebook.ts";',"const RULEBOOK = "+JSON.stringify(rulebook)+";")
+  .replace(/^import .* from "\.\/video-timeline\.mjs";\n/m, "");
 assert.match(source, /CBTeD ChatGPT MCP bridge/);
 const projectRef = "dmzzyfiwtosxtyekpbfi";
 const base = "https://" + projectRef + ".supabase.co/functions/v1/cbted-mcp";
 const testUser = "00000000-0000-4000-8000-000000000001";
+const testProject = { id:"00000000-0000-4000-8000-000000000002",owner_id:testUser,title:"Test Project",status:"active" };
+const timelineId = "00000000-0000-4000-8000-000000000030";
+const sourceId = "00000000-0000-4000-8000-000000000031";
+const titleRequest = "00000000-0000-4000-8000-000000000032";
+const timelinePlan = {schema:"cbted-video-edit-v1",aspect:"16:9",fps:30,audio:[],clips:[
+  {id:sourceId,assetId:sourceId,kind:"video",inMs:200,outMs:4400},
+]};
+let timelineRows = [{project_id:testProject.id,id:timelineId,version:1,plan:timelinePlan,created_at:"2026-11-28T10:00:00Z"}];
+let titleWrites = 0;
+let duplicatedName = false;
 let handler;
 let networkCalls=0;
 let authenticated=false;
@@ -37,7 +49,28 @@ const fakeFetch=async(url,options={})=>{
     return new Response(JSON.stringify({error:"Mock denies unplanned review write"}),{status:403});
   }
   if(uri.includes("/rest/v1/projects?")){
-    return new Response(JSON.stringify([{id:"00000000-0000-4000-8000-000000000002",owner_id:testUser,title:"Test Project",status:"active"}]),{status:200});
+    const query=new URL(uri).searchParams;
+    const rows=query.get("id")?.startsWith("eq.") && query.get("id")!=="eq."+testProject.id ? [] : [testProject];
+    if(duplicatedName && query.get("order")==="id.asc") rows.push({...testProject,id:titleRequest});
+    return new Response(JSON.stringify(rows),{status:200});
+  }
+  if(uri.includes("/rest/v1/video_edit_versions")){
+    assert.equal(options.headers.Authorization,"Bearer mocked-test-token");
+    if(options.method==="POST") {
+      const row=JSON.parse(options.body);
+      assert.equal(row.project_id,testProject.id);
+      assert.ok(!timelineRows.some((known)=>known.id===row.id||known.version===row.version));
+      timelineRows.push(row);
+      titleWrites+=1;
+      throw new Error("Simulated lost save acknowledgement");
+    }
+    const query=new URL(uri).searchParams;
+    assert.equal(query.get("project_id"),"eq."+testProject.id);
+    const ref=query.get("id");
+    return new Response(JSON.stringify(timelineRows.filter((row)=>!ref||ref===`eq.${row.id}`).sort((a,b)=>b.version-a.version).slice(0,1)),{status:200});
+  }
+  if(uri.includes("/rest/v1/assets?")){
+    return new Response(JSON.stringify([{project_id:testProject.id,id:sourceId,filename:"Version asset.mp4",mime_type:"video/mp4",duration_ms:5200}]),{status:200});
   }
   throw Error("Unexpected network call to "+uri);
 };
@@ -47,7 +80,7 @@ const sandbox={
     if(key==="SUPABASE_PUBLISHABLE_KEYS")return JSON.stringify({default:"sb_publishable_test_only"});
     return null;
   }},serve(fn){handler=fn;}},
-  Request,Response,URL,URLSearchParams,fetch:fakeFetch,console
+  Request,Response,URL,URLSearchParams,fetch:fakeFetch,console,addVideoTimelineTitle,readVideoTimeline,timelineProject
 };
 vm.runInNewContext(source,sandbox,{filename:"cbted-mcp/index.ts"});
 assert.equal(typeof handler,"function","Deno must register an HTTP handler");
@@ -73,7 +106,7 @@ assert.equal(networkCalls,0,"Refusing a missing token must not call any API");
 const list=await rpc("tools/list");
 assert.ok(list.result.tools.length>=12,"Expected full CBTeD studio/project tools");
 const names=list.result.tools.map(t=>t.name);
-for(const expected of ["cbted_get_rulebook","cbted_list_projects","cbted_get_project_context","cbted_route_task","cbted_plan_production","cbted_get_asset_link"]){
+for(const expected of ["cbted_get_rulebook","cbted_list_projects","cbted_get_project_context","cbted_route_task","cbted_plan_production","cbted_get_asset_link","cbted_get_video_timeline","cbted_add_video_timeline_title"]){
   assert.ok(names.includes(expected),expected+" missing");
 }
 assert.ok(list.result.tools.find(t=>t.name==="cbted_get_rulebook").securitySchemes.some(s=>s.type==="noauth"));
@@ -114,6 +147,36 @@ const projects=await rpc("tools/call",{name:"cbted_list_projects",arguments:{}},
 assert.equal(projects.result.isError,false);
 assert.equal(JSON.parse(projects.result.content[0].text).projects[0].title,"Test Project");
 assert.ok(networkCalls>=2,"Authenticated call verifies the user then reads with a delegated bearer");
+const timelineCall=(name,args,auth=true)=>rpc("tools/call",{name,arguments:args},auth).then(({result})=>result);
+const readTimeline=(args,auth=true)=>timelineCall("cbted_get_video_timeline",args,auth);
+assert.equal((await readTimeline({project_name:"test project"},false)).isError,true);
+assert.equal((await readTimeline({project_id:sourceId})).isError,true);
+const savedTimeline=await readTimeline({project_name:" test project "});
+assert.equal(savedTimeline.structuredContent.duration_ms,4200);
+assert.equal(savedTimeline.structuredContent.revision_id,timelineId);
+duplicatedName=true;
+assert.match((await readTimeline({project_name:"Test Project"})).content[0].text,/More than one project/);
+duplicatedName=false;
+const request={project_id:testProject.id,expected_revision_id:timelineId,request_id:titleRequest,text:"Sample opening title",
+  duration_ms:3000,entrance:"rise",fade_out_ms:450};
+const append=(args,auth=true)=>timelineCall("cbted_add_video_timeline_title",args,auth);
+assert.equal((await append(request,false)).isError,true);
+assert.equal((await append({...request,duration_ms:9000})).isError,true);
+const appended=await append(request);
+assert.equal(appended.structuredContent.version,2);
+assert.equal(appended.structuredContent.render_submitted,false);
+assert.equal(appended.structuredContent.title.endMs,3000);
+assert.equal(appended.structuredContent.title.fadeOutMs,450);
+assert.equal((await append(request)).isError,false,"exact replay is acknowledged");
+assert.equal(titleWrites,1,"retries must not duplicate saved titles");
+assert.match((await append({...request,text:"Different title"})).content[0].text,/different edit/);
+assert.match((await append({...request,request_id:sourceId})).content[0].text,/already belongs/);
+assert.match((await append({...request,request_id:testUser})).content[0].text,/newer timeline/);
+assert.equal((await readTimeline({project_id:testProject.id})).structuredContent.titles[0].entrance,"rise");
+timelineRows=[];
+const noDraft=await readTimeline({project_id:testProject.id});
+assert.equal(noDraft.structuredContent.state,"no_saved_draft");
+assert.equal(noDraft.structuredContent.videos[0].duration_ms,5200);
 const notification=await handler(new Request(base,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized"})}));
 assert.equal(notification.status,202);
 console.log("CBTeD MCP protocol/auth/rules smoke tests passed ("+list.result.tools.length+" tools).");
