@@ -2,6 +2,7 @@
 // No media provider is invoked here: ChatGPT runs available native creative tools.
 // Source snapshots are bundled verbatim from GitHub with their original blob SHAs.
 import {RULEBOOK} from "./rulebook.ts";
+import { addVideoTimelineTitle, readVideoTimeline, timelineProject } from "./video-timeline.mjs";
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") || "https://dmzzyfiwtosxtyekpbfi.supabase.co").replace(/\/$/, "");
 const RESOURCE = SUPABASE_URL + "/functions/v1/cbted-mcp";
 const METADATA = RESOURCE + "/.well-known/oauth-protected-resource";
@@ -15,10 +16,20 @@ const tool = (name,description,properties,required=[],readOnly=true,publicAccess
   securitySchemes:publicAccess?[{type:"noauth"}]:[{type:"oauth2",scopes:[]}]
 });
 const S={type:"string"}; const U={type:"string",format:"uuid"};
+const timelineTarget = { project_id: U, project_name: {type:"string",minLength:1,maxLength:200} };
+const timelineTime = {type:"integer",minimum:0};
 const tools = [
   tool("cbted_get_rulebook","FIRST for any CBTeD creative work. Return the COMPLETE authoritative universal master workflow and the chosen studio procedure with content and source SHA. This server supplies rules, while ChatGPT itself uses its available native writing/image/video tools one operation at a time. Do not claim an action occurred until its native tool result is verified.",{studio:{type:"string",enum:["core","writing","visual","animation"],description:"Studio whose complete instructions should accompany universal rules."}},["studio"],true,true),
   tool("cbted_list_projects","List projects belonging to the authenticated user, preserving project identity and continuity.",{},[],true),
-  tool("cbted_get_project_context","Read an owned project, rules, source metadata, approvals, studio settings, assets, tasks, outputs and handoffs. For exact writing content call cbted_get_source_version after selecting the version.",{project_id:U},["project_id"],true),
+  tool("cbted_get_project_context","Read an owned project, rules, assets, tasks, outputs, handoffs and the saved video timeline, including its duration and revision. For exact writing content call cbted_get_source_version after selecting the version.",{project_id:U},["project_id"],true),
+  tool("cbted_get_video_timeline","Read the latest saved video edit in the owner's project by exact name or UUID. Reports the picture duration in milliseconds, cut timing, titles and draft revision. If no draft exists, lists known video asset durations separately. Supply either project_name or project_id.",timelineTarget,[],true),
+  tool("cbted_add_video_timeline_title","On the creator's request, append a timed title to the saved Studio video timeline identified by exact name or UUID. Read cbted_get_video_timeline first and use its exact revision ID. Start and duration are in milliseconds and include motion. For an animated three-second opener use start_ms 0, duration_ms 3000, entrance rise, fade_in_ms 450, fade_out_ms 450. Use a fresh request UUID and reuse it only for exact retries. Saves a new draft without rendering or publishing.",{
+    ...timelineTarget, expected_revision_id:U, request_id:U, text:{type:"string",minLength:1,maxLength:120},
+    start_ms:timelineTime,duration_ms:{type:"integer",minimum:100},fade_in_ms:timelineTime,fade_out_ms:timelineTime,
+    entrance:{type:"string",enum:["none","fade","rise"]},position:{type:"string",enum:["top","centre","bottom"]},
+    font:{type:"string",enum:["classic","editorial","typewriter","poster","rounded"]},size:{type:"integer",minimum:3,maximum:15},
+    colour:{type:"string",pattern:"^#[0-9a-fA-F]{6}$"},align:{type:"string",enum:["left","centre","right"]},backing:{type:"boolean"},
+  },["expected_revision_id","request_id","text"],false),
   tool("cbted_get_source_version","Retrieve the actual complete source-version text, ideas and suggestions without substituting a summary.",{project_id:U,source_version_id:U},["project_id","source_version_id"],true),
   tool("cbted_create_project","Create a user-owned persistent creative project; this does not begin generation.",{title:{type:"string",minLength:1,maxLength:200},description:S},["title"],false),
   tool("cbted_create_source","Register a titled song, story, poem, script, treatment or other source within an owned project before adding versions.",{project_id:U,title:{type:"string",minLength:1,maxLength:200},source_kind:S},["project_id","title"],false),
@@ -61,13 +72,20 @@ const tools = [
   tool("cbted_media_submitted","After actual provider generation submission, record the genuine Runway/Higgsfield task id. Does not prove that media has finished rendering.",{job_id:U,provider_job_id:S},["job_id","provider_job_id"],false),
   tool("cbted_media_reference","Get a 15-minute signed URL for a real, private, project-owned image, video clip or audio file. Use verified files for video generation and FFmpeg assembly; never invent assets.",{project_id:U,asset_id:U,kind:{type:"string",enum:["image","video","audio"]}},["project_id","asset_id"],true),
   tool("cbted_media_import","After provider actually finishes rendering and supplies a verifiable HTTPS result URL, safely import the real media into private CBTeD project storage. Only configured provider media hosts are accepted.",{job_id:U,result_url:S},["job_id","result_url"],false),
-  tool("cbted_media_verify","After inspecting the actual stored image/video/audio, atomically record its creative review and, if linked, finish the claimed production stage. Never claim a prompt is a reviewed file.",{
-    job_id:U,decision:{type:"string",enum:["passed","failed"]},review_note:S},["job_id","decision","review_note"],false),
+  tool("cbted_media_verify","After inspecting the actual stored image/video/audio, atomically record its creative review and, if linked, finish the claimed production stage. Never claim a prompt is a reviewed file. Visual passes require actual quality_evidence observed in the saved output.",{
+    job_id:U,decision:{type:"string",enum:["passed","failed"]},review_note:S,
+    quality_evidence:{type:"object",properties:{
+      artifact_opened:{type:"boolean"},output_count:{type:"integer",minimum:1,maximum:1},panel_count:{type:"integer",minimum:1,maximum:1},
+      aspect_ratio_matches:{type:"boolean"},identity_approved:{type:"boolean"},references_actually_attached:{type:"boolean"},
+      has_unwanted_text:{type:"boolean"},exact_title_verified:{type:"boolean"},composition_distinct:{type:"boolean"},
+      single_asset_delivered:{type:"boolean"},continuous_camera_verified:{type:"boolean"}
+    },additionalProperties:false}},["job_id","decision","review_note"],false),
   tool("cbted_route_task","CBTeD ChatGPT-native coordinator: classify a targeted creative request into independent specialist stages. Does NOT create a run, invoke generation, require the website or demand unrelated studios. For a verse edit, select editorial; for video from existing song and image, select video_from_assets.",{intent:{type:"string",enum:["critique","suggestions","line_edit","editorial","rewrite","new_song","verse","images","audio","video_from_assets","video_from_idea","complete"]},previous_intent:{type:"string"},has_existing_source:{type:"boolean"},has_image:{type:"boolean"},has_audio:{type:"boolean"},image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["intent"],true),
   tool("cbted_plan_production","Plan a CBTeD workflow without generating content. intent=plan is read-only; intent=execute persists a new run but does not start any agents.",{project_id:U,workflow:{type:"string",enum:["writing","writing_critique","writing_suggestions","writing_line_edit","writing_rewrite","visual","animation","song_video","idea_to_publish","audio","song_video_publish","idea_to_publish_audio","animation_publish","plan_only"]},intent:{type:"string",enum:["plan","execute"]},instructions:S,source_version_id:U,image_count:{type:"integer",minimum:1,maximum:20},video_count:{type:"integer",minimum:1,maximum:20}},["workflow","intent"],false),
   tool("cbted_get_production_status","Read an owned production run, every atomic step and its explicit approval decisions.",{run_id:U},["run_id"],true),
   tool("cbted_approve_production_step","Record a user-approved or revoked authorisation for one specific gated step. NEVER infer approval from a prior instruction or call this without the user's explicit decision.",{run_id:U,step_key:S,decision:{type:"string",enum:["approved","rejected","revoked"]},note:S},["run_id","step_key","decision"],false),
   tool("cbted_execute_next","Execute only the next authorised single production operation through the controlled backend. Paid provider generation is disabled unless backend credentials and opt-in are configured.",{run_id:U},["run_id"],false),
+  tool("cbted_rebase_zero_credit_media_run_rules","Narrow owner-only repair for an approved earliest-pending image stage whose exact existing job is ready, native, zero-credit and requires no media credit approval. Refresh only that run's locked-rules snapshot and return an audited receipt; never creates a run/job/approval, claims, generates, reviews, finishes or publishes. Re-read before the normal claims.",{run_id:U,step_key:S,job_id:U},["run_id","step_key","job_id"],false),
   tool("cbted_claim_production_step","Atomically claim one authorised stage before invoking a ChatGPT native tool. It rejects premature execution, missing approvals, and changed locked rules.",{run_id:U,step_key:S},["run_id","step_key"],false),
   tool("cbted_finish_production_step","Record actual output after a previously authorised tool operation. Media requires a project-owned verified private asset, not a prompt or temporary link.",{run_id:U,step_key:S,result:{type:"string",enum:["passed","failed"]},text:S,asset_id:U,evidence:{type:"object"}},["run_id","step_key","result"],false),
   tool("cbted_retry_production_step","Retry exactly one failed stage, preserving all previously passed stages and stopping after the permitted attempt count.",{run_id:U,step_key:S},["run_id","step_key"],false),
@@ -123,7 +141,7 @@ function authError(){
  return {isError:true,content:[{type:"text",text:"CBTeD authentication required. Connect your existing CBTeD Supabase account."}],_meta:{"mcp/www_authenticate":[challenge()]}};
 }
 async function rest(token,table,query={},method="GET",body=null){
- const allowed=["projects","sources","source_versions","project_rules","assets","tasks","outputs","approvals","handoffs","studio_settings","project_runs","production_runs","production_steps"];
+ const allowed=["projects","sources","source_versions","project_rules","assets","tasks","outputs","approvals","handoffs","studio_settings","project_runs","production_runs","production_steps","video_edit_versions"];
  if(!allowed.includes(table))throw Error("Unsupported table");
  const qs=new URLSearchParams(query);
  const url=SUPABASE_URL+"/rest/v1/"+table+(qs.toString()?"?"+qs:"");
@@ -258,6 +276,16 @@ async function runTool(name,a,token,user){
    }
    return {intent:mode,previous_intent:previous||null,direction_changed:!!previous&&previous!==mode,studios:[...new Set(stages.map(s=>s.studio))],stages,existing_source_preserved:!!a.has_existing_source,existing_image_preserved:!!a.has_image,existing_audio_preserved:!!a.has_audio,generation_started:false,requires_website:false,note:"Follow authoritative studio rules and perform actual creative work inside ChatGPT. This is a routing plan, not an output."};
  }
+ if(name==="cbted_rebase_zero_credit_media_run_rules"){
+  requireUUID(a.run_id,"run_id");requireUUID(a.job_id,"job_id");requiredText(a.step_key,"step_key",120);
+  const response=await fetch(SUPABASE_URL+"/rest/v1/rpc/cbted_rebase_zero_credit_media_run_rules",{
+   method:"POST",headers:{"Content-Type":"application/json","apikey":publishableKey(),"Authorization":"Bearer "+token},
+   body:JSON.stringify({p_run:a.run_id,p_step:a.step_key,p_job:a.job_id})
+  });
+  let value;try{value=await response.json()}catch{throw Error("Rules-snapshot refresh returned invalid JSON");}
+  if(!response.ok)throw Error("Rules-snapshot refresh blocked: "+String(value?.message||value?.error||"Access denied").slice(0,250));
+  return value;
+ }
  if(name.startsWith("cbted_")&&["cbted_plan_production","cbted_get_production_status","cbted_approve_production_step","cbted_execute_next","cbted_claim_production_step","cbted_finish_production_step","cbted_retry_production_step"].includes(name)){
    const endpoints={
      cbted_plan_production:"plan",cbted_get_production_status:"status",
@@ -288,6 +316,12 @@ async function runTool(name,a,token,user){
  if(name==="cbted_list_projects"){
    return {projects:await rest(token,"projects",{select:"id,title,description,status,current_studio,created_at,updated_at",order:"updated_at.desc",limit:"50"})};
  }
+ if(name==="cbted_get_video_timeline" || name==="cbted_add_video_timeline_title"){
+   const project=await timelineProject(rest,token,user.id,a);
+   return name==="cbted_get_video_timeline"
+     ? readVideoTimeline(rest,token,project)
+     : addVideoTimelineTitle(rest,token,project,a);
+ }
  if(name==="cbted_create_project"){
    const title=requiredText(a.title,"title",200);
    const row={owner_id:user.id,title,description:allowedText(a.description,5000)};
@@ -296,7 +330,7 @@ async function runTool(name,a,token,user){
  if(name==="cbted_get_project_context"){
    const p=await ownedProject(token,a.project_id);
    const pid=p.id;
-   const [rules,sources,versions,approvals,settings,assets,tasks,outputs,handoffs,production_runs]=await Promise.all([
+   const [rules,sources,versions,approvals,settings,assets,tasks,outputs,handoffs,production_runs,video_timeline]=await Promise.all([
      rest(token,"project_rules",{...byProject(pid),order:"created_at.desc",limit:"100"}),
      rest(token,"sources",{...byProject(pid),order:"created_at.desc"}),
      rest(token,"source_versions",{...byProject(pid,"id,project_id,source_id,version_number,based_on_id,change_note,created_at"),order:"created_at.desc",limit:"100"}),
@@ -306,11 +340,12 @@ async function runTool(name,a,token,user){
      rest(token,"tasks",{...byProject(pid),order:"updated_at.desc",limit:"100"}),
      rest(token,"outputs",{...byProject(pid,"id,project_id,task_id,output_kind,sequence_index,asset_id,source_version_id,verification_status,details,created_at"),order:"created_at.desc",limit:"100"}),
      rest(token,"handoffs",{...byProject(pid),order:"created_at.desc",limit:"50"}),
-     rest(token,"production_runs",{...byProject(pid,"id,workflow,status,created_at"),order:"created_at.desc,id.desc",limit:"20"})
+     rest(token,"production_runs",{...byProject(pid,"id,workflow,status,created_at"),order:"created_at.desc,id.desc",limit:"20"}),
+     readVideoTimeline(rest,token,p,false).catch(()=>({state:"unavailable"})),
    ]);
    const latestRun=production_runs[0];
    const production_steps=latestRun ? await rest(token,"production_steps",{...byProject(pid,"run_id,step_key,sequence_index,status,attempt_number,asset_id"),run_id:"eq."+latestRun.id,order:"sequence_index.asc",limit:"200"}) : [];
-   return {project:p,production_runs,production_steps,rules,sources,source_versions:versions,approvals,studio_settings:settings,assets,tasks,outputs,handoffs,note:"For production manuscripts and run evidence use cbted_get_production_status with the run ID. Read saved source versions with cbted_get_source_version. Read full master rules using cbted_get_rulebook. Output metadata alone is not evidence of generated media."};
+   return {project:p,video_timeline,production_runs,production_steps,rules,sources,source_versions:versions,approvals,studio_settings:settings,assets,tasks,outputs,handoffs,note:"For production manuscripts and run evidence use cbted_get_production_status with the run ID. Read saved source versions with cbted_get_source_version. Read full master rules using cbted_get_rulebook. Output metadata alone is not evidence of generated media."};
  }
  if(name==="cbted_get_source_version"){
    await ownedProject(token,a.project_id);requireUUID(a.source_version_id,"source_version_id");
